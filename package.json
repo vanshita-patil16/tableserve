@@ -1,0 +1,41 @@
+{
+  "name": "tableserve-platform",
+  "version": "1.0.0",
+  "description": "TABLESERVE - Enterprise Restaurant Reservation and Ordering Microservices Platform",
+  "main": "services/api-gateway/server.js",
+  "scripts": {
+    "start": "node start-all.js",
+    "start:all": "node start-all.js",
+    "start:gateway": "node services/api-gateway/server.js",
+    "start:restaurant": "node services/restaurant-service/server.js",
+    "start:reservation": "node services/reservation-service/server.js",
+    "start:ordering": "node services/ordering-service/server.js",
+    "start:search": "node services/search-service/server.js",
+    "seed": "node database/seeder.js",
+    "test": "node tests/api-tests.js",
+    "test:unit": "node tests/unit/run-tests.js"
+  },
+  "keywords": [
+    "restaurant",
+    "reservation",
+    "ordering",
+    "microservices",
+    "aws",
+    "lex",
+    "react",
+    "docker"
+  ],
+  "author": "TABLESERVE Team",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^11.0.5",
+    "yamljs": "^0.3.0"
+  }
+}

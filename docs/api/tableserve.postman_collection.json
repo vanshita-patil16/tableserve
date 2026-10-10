@@ -1,0 +1,343 @@
+{
+  "info": {
+    "name": "TABLESERVE API Collection (Enterprise Microservices)",
+    "_postman_id": "893c5d71-tableserve-v1-postman-collection",
+    "description": "Complete Postman test collection for TABLESERVE: Auth, Restaurant, Reservation, Ordering, Search, and Amazon Lex Chatbot microservices.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000", "type": "string" },
+    { "key": "authToken", "value": "", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "testReservationId", "value": "res-01", "type": "string" },
+    { "key": "testOrderId", "value": "ord-01", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication Service",
+      "item": [
+        {
+          "name": "Login as Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "if (json.token) pm.collectionVariables.set('authToken', json.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"Customer@123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "if (json.token) pm.collectionVariables.set('adminToken', json.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@tableserve.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Register New Customer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah Connor\",\n  \"email\": \"sarah.connor@example.com\",\n  \"password\": \"Password@123\",\n  \"role\": \"CUSTOMER\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          }
+        },
+        {
+          "name": "Get Authenticated Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/profile", "host": ["{{baseUrl}}"], "path": ["api", "auth", "profile"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Restaurant Service",
+      "item": [
+        {
+          "name": "List Restaurants",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/restaurants", "host": ["{{baseUrl}}"], "path": ["api", "restaurants"] }
+          }
+        },
+        {
+          "name": "Get Restaurant Details & Menu",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/restaurants/rest-01", "host": ["{{baseUrl}}"], "path": ["api", "restaurants", "rest-01"] }
+          }
+        },
+        {
+          "name": "Get Restaurant Menu Items",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/restaurants/rest-01/menu", "host": ["{{baseUrl}}"], "path": ["api", "restaurants", "rest-01", "menu"] }
+          }
+        },
+        {
+          "name": "Admin Create Restaurant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Trattoria Bella Vista\",\n  \"description\": \"Scenic rooftop Italian dining.\",\n  \"cuisine\": \"Italian\",\n  \"address\": \"100 Broadway\",\n  \"city\": \"New York\",\n  \"rating\": 4.7,\n  \"price_tier\": \"$$$\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/restaurants", "host": ["{{baseUrl}}"], "path": ["api", "restaurants"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Search Service",
+      "item": [
+        {
+          "name": "Search by Query Term",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/search?q=pizza", "host": ["{{baseUrl}}"], "path": ["api", "search"], "query": [{ "key": "q", "value": "pizza" }] }
+          }
+        },
+        {
+          "name": "Filter by Cuisine & Rating",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/search?cuisine=Japanese&minRating=4.8", "host": ["{{baseUrl}}"], "path": ["api", "search"], "query": [{ "key": "cuisine", "value": "Japanese" }, { "key": "minRating", "value": "4.8" }] }
+          }
+        },
+        {
+          "name": "Filter by Dietary Tags",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/search?dietary=Vegetarian", "host": ["{{baseUrl}}"], "path": ["api", "search"], "query": [{ "key": "dietary", "value": "Vegetarian" }] }
+          }
+        },
+        {
+          "name": "Get Autocomplete Suggestions",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/search/suggest?q=sak", "host": ["{{baseUrl}}"], "path": ["api", "search", "suggest"], "query": [{ "key": "q", "value": "sak" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Reservation & Payment Service",
+      "item": [
+        {
+          "name": "Check Table Availability",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/reservations/availability?restaurant_id=rest-01&date=2026-11-20&guests=2", "host": ["{{baseUrl}}"], "path": ["api", "reservations", "availability"], "query": [{ "key": "restaurant_id", "value": "rest-01" }, { "key": "date", "value": "2026-11-20" }, { "key": "guests", "value": "2" }] }
+          }
+        },
+        {
+          "name": "Create Reservation (Double-Booking Lock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurant_id\": \"rest-01\",\n  \"reservation_date\": \"2026-11-20\",\n  \"time_slot\": \"19:00\",\n  \"guests\": 2,\n  \"special_requests\": \"Window view\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/reservations", "host": ["{{baseUrl}}"], "path": ["api", "reservations"] }
+          }
+        },
+        {
+          "name": "Simulate Successful Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75.00,\n  \"reference_type\": \"ORDER\",\n  \"reference_id\": \"ord-01\",\n  \"card_number\": \"4242424242424242\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/payments/simulate", "host": ["{{baseUrl}}"], "path": ["api", "payments", "simulate"] }
+          }
+        },
+        {
+          "name": "Simulate Declined Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75.00,\n  \"reference_type\": \"ORDER\",\n  \"reference_id\": \"ord-01\",\n  \"card_number\": \"4000000000000000\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/payments/simulate", "host": ["{{baseUrl}}"], "path": ["api", "payments", "simulate"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Ordering Service",
+      "item": [
+        {
+          "name": "Place Order with Pricing Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurant_id\": \"rest-01\",\n  \"order_type\": \"DINE_IN\",\n  \"table_number\": 3,\n  \"items\": [\n    { \"menu_item_id\": \"menu-01-01\", \"quantity\": 1 },\n    { \"menu_item_id\": \"menu-01-02\", \"quantity\": 1 }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          }
+        },
+        {
+          "name": "List User Orders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          }
+        },
+        {
+          "name": "Update Order Status (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"READY\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders/ord-01/status", "host": ["{{baseUrl}}"], "path": ["api", "orders", "ord-01", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Amazon Lex Chatbot (8 Intents)",
+      "item": [
+        {
+          "name": "GreetingIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Hello TABLESERVE!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        },
+        {
+          "name": "RestaurantSearchIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Find Italian restaurants\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        },
+        {
+          "name": "MenuIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Show menu for Bella Italia\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        },
+        {
+          "name": "ReservationIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Book a table for 2\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        },
+        {
+          "name": "ReservationStatusIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Check status of res-01\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        },
+        {
+          "name": "CancelReservationIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Cancel reservation res-02\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        },
+        {
+          "name": "HelpIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"help\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        },
+        {
+          "name": "FallbackIntent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"xyz unpredictable sentence\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chatbot/message", "host": ["{{baseUrl}}"], "path": ["api", "chatbot", "message"] }
+          }
+        }
+      ]
+    }
+  ]
+}

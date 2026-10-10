@@ -1,0 +1,589 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TABLESERVE Enterprise Production CloudFormation Template
+  Deploys complete AWS architecture: VPC, Multi-AZ Subnets, ALB with Path Routing,
+  EC2 per Microservice, RDS PostgreSQL, S3, ECR, SNS, Route53, and IAM Roles.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: tableserve-prod
+    Description: Environment prefix tag for all deployed resources
+
+  DBUsername:
+    Type: String
+    Default: tableserve_admin
+    Description: Database master administrator username
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Default: TableserveSecret2026!
+    Description: Database master administrator password
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type for microservices
+
+Resources:
+  # =========================================================================
+  # 1. NETWORKING: VPC, SUBNETS, GATEWAYS, ROUTING
+  # =========================================================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-vpc"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-igw"
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets (Multi-AZ)
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-az1"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-az2"
+
+  # Private Subnets (Multi-AZ)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-az1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-az2"
+
+  # NAT Gateway for Outbound Private Subnet Traffic
+  NatEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-nat-gw"
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-rt"
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-rt"
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # =========================================================================
+  # 2. SECURITY GROUPS
+  # =========================================================================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public HTTP/HTTPS access to Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-alb-sg"
+
+  ServicesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for internal microservice EC2 instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5004
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5004
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-services-sg"
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Secure PostgreSQL RDS access from microservices only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ServicesSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-rds-sg"
+
+  # =========================================================================
+  # 3. AMAZON RDS POSTGRESQL (MULTI-AZ)
+  # =========================================================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private Subnets for RDS PostgreSQL
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-db-subnet-group"
+
+  PostgresDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: tableserve
+      Engine: postgres
+      EngineVersion: '16.3'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      MultiAZ: true
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      PubliclyAccessible: false
+      DeleteAutomatedBackups: false
+      BackupRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-rds-postgres"
+
+  # =========================================================================
+  # 4. STORAGE: AMAZON S3 & AMAZON ECR
+  # =========================================================================
+  FrontendS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-frontend-${AWS::AccountId}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  MediaAssetsS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-media-assets-${AWS::AccountId}"
+
+  # ECR Repositories for Docker Containers
+  RestaurantECRRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tableserve/restaurant-service
+
+  ReservationECRRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tableserve/reservation-service
+
+  OrderingECRRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tableserve/ordering-service
+
+  SearchECRRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tableserve/search-service
+
+  GatewayECRRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tableserve/api-gateway
+
+  # =========================================================================
+  # 5. NOTIFICATION: AMAZON SNS TOPIC
+  # =========================================================================
+  ReservationConfirmationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentName}-reservation-confirmations"
+      DisplayName: TABLESERVE Reservation Notification Service
+
+  # =========================================================================
+  # 6. SERVICE DISCOVERY: ROUTE53 PRIVATE HOSTED ZONE
+  # =========================================================================
+  PrivateHostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: tableserve.internal
+      VPCs:
+        - VPCId: !Ref VPC
+          VPCRegion: !Ref "AWS::Region"
+      HostedZoneConfig:
+        Comment: Private DNS resolution for internal microservices discovery
+
+  # =========================================================================
+  # 7. IAM ROLES & INSTANCE PROFILES
+  # =========================================================================
+  EC2ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-ec2-service-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: SNSPublishAndLexAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref ReservationConfirmationsTopic
+              - Effect: Allow
+                Action:
+                  - lex:RecognizeText
+                  - lex:RecognizeUtterance
+                Resource: "*"
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2ServiceRole
+
+  # =========================================================================
+  # 8. APPLICATION LOAD BALANCER & PATH-BASED ROUTING
+  # =========================================================================
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${EnvironmentName}-alb"
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-alb"
+
+  # Target Groups
+  GatewayTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-tg-gateway"
+      Port: 5000
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 15
+      TargetType: instance
+
+  RestaurantTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-tg-restaurant"
+      Port: 5001
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      TargetType: instance
+
+  ReservationTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-tg-reservation"
+      Port: 5002
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      TargetType: instance
+
+  OrderingTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-tg-ordering"
+      Port: 5003
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      TargetType: instance
+
+  SearchTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-tg-search"
+      Port: 5004
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      TargetType: instance
+
+  # ALB Listener on Port 80
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GatewayTargetGroup
+
+  # ALB Path-Based Routing Rules
+  RestaurantRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values: ['/api/restaurants*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref RestaurantTargetGroup
+
+  ReservationRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 20
+      Conditions:
+        - Field: path-pattern
+          Values: ['/api/reservations*', '/api/payments*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ReservationTargetGroup
+
+  OrderingRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 30
+      Conditions:
+        - Field: path-pattern
+          Values: ['/api/orders*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref OrderingTargetGroup
+
+  SearchRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 40
+      Conditions:
+        - Field: path-pattern
+          Values: ['/api/search*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SearchTargetGroup
+
+  # =========================================================================
+  # 9. EC2 INSTANCES (ONE PER SERVICE IN PRIVATE SUBNETS)
+  # =========================================================================
+  RestaurantServiceInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c7217cdde317cfec # Standard Amazon Linux 2023 in us-east-1
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds: [!Ref ServicesSecurityGroup]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-restaurant-ec2"
+
+  ReservationServiceInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c7217cdde317cfec
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds: [!Ref ServicesSecurityGroup]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-reservation-ec2"
+
+  OrderingServiceInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c7217cdde317cfec
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet2
+      SecurityGroupIds: [!Ref ServicesSecurityGroup]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ordering-ec2"
+
+  SearchServiceInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c7217cdde317cfec
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet2
+      SecurityGroupIds: [!Ref ServicesSecurityGroup]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-search-ec2"
+
+  ApiGatewayInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c7217cdde317cfec
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds: [!Ref ServicesSecurityGroup]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-gateway-ec2"
+
+Outputs:
+  LoadBalancerDNS:
+    Description: Application Load Balancer Public DNS URL
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub "${EnvironmentName}-ALB-DNS"
+
+  RDSEndpoint:
+    Description: PostgreSQL RDS Cluster Endpoint
+    Value: !GetAtt PostgresDBInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${EnvironmentName}-RDS-Endpoint"
+
+  FrontendBucketWebsiteURL:
+    Description: S3 Static Website URL for React Frontend
+    Value: !GetAtt FrontendS3Bucket.WebsiteURL
+
+  SNSTopicARN:
+    Description: Reservation Confirmation SNS Topic ARN
+    Value: !Ref ReservationConfirmationsTopic
+    Export:
+      Name: !Sub "${EnvironmentName}-SNS-Topic"

@@ -1,0 +1,149 @@
+<mxfile host="app.diagrams.net" modified="2026-10-10T18:00:00.000Z" agent="TABLESERVE Cloud Architect" version="21.0.0" type="device">
+  <diagram id="tableserve-aws-architecture" name="TABLESERVE AWS Architecture">
+    <mxGraphModel dx="1422" dy="840" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- User / Clients -->
+        <mxCell id="user_client" value="&lt;b&gt;Clients (Web &amp; Mobile)&lt;/b&gt;&lt;br&gt;React + Vite SPA" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="320" width="100" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Route 53 -->
+        <mxCell id="route53" value="&lt;b&gt;Amazon Route 53&lt;/b&gt;&lt;br&gt;DNS &amp; Traffic Routing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="350" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Frontend S3 + CloudFront -->
+        <mxCell id="s3_frontend" value="&lt;b&gt;Amazon S3 + CloudFront&lt;/b&gt;&lt;br&gt;React Frontend Hosting&lt;br&gt;Media Menu Assets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="240" y="160" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- AWS Cloud Boundary -->
+        <mxCell id="aws_cloud" value="AWS Cloud (Region: us-east-1)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;startSize=30;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="60" width="1060" height="980" as="geometry" />
+        </mxCell>
+
+        <!-- Amazon Lex -->
+        <mxCell id="amazon_lex" value="&lt;b&gt;Amazon Lex v2&lt;/b&gt;&lt;br&gt;8 Conversational Intents&lt;br&gt;Natural Language Engine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="aws_cloud">
+          <mxGeometry x="50" y="50" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Amazon SNS -->
+        <mxCell id="amazon_sns" value="&lt;b&gt;Amazon SNS&lt;/b&gt;&lt;br&gt;Reservation Confirmations&lt;br&gt;SMS &amp; Email Dispatch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="aws_cloud">
+          <mxGeometry x="800" y="50" width="190" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- VPC Boundary -->
+        <mxCell id="vpc" value="VPC (10.0.0.0/16)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#FF9900;strokeWidth=2;startSize=25;" vertex="1" parent="aws_cloud">
+          <mxGeometry x="40" y="170" width="980" height="770" as="geometry" />
+        </mxCell>
+
+        <!-- Internet Gateway -->
+        <mxCell id="igw" value="Internet Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="vpc">
+          <mxGeometry x="30" y="40" width="130" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Public Subnets Container -->
+        <mxCell id="public_subnets" value="Public Subnets (Multi-AZ: 10.0.1.0/24 &amp; 10.0.2.0/24)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;startSize=25;" vertex="1" parent="vpc">
+          <mxGeometry x="30" y="110" width="920" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- ALB -->
+        <mxCell id="alb" value="&lt;b&gt;Application Load Balancer (ALB)&lt;/b&gt;&lt;br&gt;Path-Based Routing Rules:&lt;br&gt;/api/restaurants* | /api/reservations* | /api/orders* | /api/search*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" vertex="1" parent="public_subnets">
+          <mxGeometry x="40" y="40" width="560" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- NAT Gateway -->
+        <mxCell id="nat_gw" value="NAT Gateway&lt;br&gt;(Public IP / EIP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="public_subnets">
+          <mxGeometry x="670" y="45" width="140" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Private Subnets Container -->
+        <mxCell id="private_subnets" value="Private Subnets (Multi-AZ: 10.0.11.0/24 &amp; 10.0.12.0/24)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;startSize=25;" vertex="1" parent="vpc">
+          <mxGeometry x="30" y="290" width="920" height="450" as="geometry" />
+        </mxCell>
+
+        <!-- EC2 1: Restaurant Service -->
+        <mxCell id="ec2_rest" value="&lt;b&gt;Restaurant Service&lt;/b&gt;&lt;br&gt;EC2 (Port 5001)&lt;br&gt;Restaurant &amp; Menu CRUD&lt;br&gt;Table Layouts &amp; Swagger" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="private_subnets">
+          <mxGeometry x="30" y="50" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- EC2 2: Reservation Service -->
+        <mxCell id="ec2_res" value="&lt;b&gt;Reservation &amp; Payment&lt;/b&gt;&lt;br&gt;EC2 (Port 5002)&lt;br&gt;Double-Booking Lock&lt;br&gt;Payment Simulation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="private_subnets">
+          <mxGeometry x="250" y="50" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- EC2 3: Ordering Service -->
+        <mxCell id="ec2_ord" value="&lt;b&gt;Ordering Service&lt;/b&gt;&lt;br&gt;EC2 (Port 5003)&lt;br&gt;Price Verification&lt;br&gt;Order Lifecycle" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="private_subnets">
+          <mxGeometry x="470" y="50" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- EC2 4: Search Service -->
+        <mxCell id="ec2_srch" value="&lt;b&gt;Search Service&lt;/b&gt;&lt;br&gt;EC2 (Port 5004)&lt;br&gt;Full-text Matching&lt;br&gt;Dietary &amp; Cuisine Filters" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="private_subnets">
+          <mxGeometry x="690" y="50" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- RDS PostgreSQL Database -->
+        <mxCell id="rds_postgres" value="&lt;b&gt;Amazon RDS PostgreSQL (Multi-AZ)&lt;/b&gt;&lt;br&gt;High-Availability Master &amp; Standby Replica&lt;br&gt;Tables: Users, Restaurants, Tables, Menus, Reservations, Payments, Orders" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="private_subnets">
+          <mxGeometry x="180" y="240" width="540" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Connectors -->
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="user_client" target="route53">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="route53" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="route53" target="s3_frontend">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="vpc" source="alb" target="ec2_rest">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="vpc" source="alb" target="ec2_res">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="vpc" source="alb" target="ec2_ord">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="vpc" source="alb" target="ec2_srch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="private_subnets" source="ec2_rest" target="rds_postgres">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="private_subnets" source="ec2_res" target="rds_postgres">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="private_subnets" source="ec2_ord" target="rds_postgres">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="private_subnets" source="ec2_srch" target="rds_postgres">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="aws_cloud" source="ec2_res" target="amazon_sns">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="aws_cloud" source="amazon_lex" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
