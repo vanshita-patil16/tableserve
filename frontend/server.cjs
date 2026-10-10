@@ -13,8 +13,10 @@ app.use('/src', express.static(path.join(__dirname, 'src')));
 app.use(express.static(__dirname));
 
 // Proxy /api requests to API Gateway (port 5000)
+// Preserves the full /api path and query parameters cleanly
 app.use('/api', (req, res) => {
-  const targetUrl = new URL(req.url, GATEWAY_URL + '/api');
+  const fullApiPath = req.originalUrl || ('/api' + req.url);
+  const targetUrl = new URL(fullApiPath, GATEWAY_URL);
 
   const proxyReq = http.request(
     targetUrl.toString(),
