@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "TABLESERVE: Start Full Stack",
+      "type": "shell",
+      "command": "node start-all.js",
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "env": {
+          "PATH": "C:\\Program Files\\nodejs;${env:PATH}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "TABLESERVE: Seed Database",
+      "type": "shell",
+      "command": "node database/seeder.js",
+      "problemMatcher": [],
+      "options": {
+        "env": {
+          "PATH": "C:\\Program Files\\nodejs;${env:PATH}"
+        }
+      }
+    },
+    {
+      "label": "TABLESERVE: Run API Tests",
+      "type": "shell",
+      "command": "node tests/api-tests.js",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "options": {
+        "env": {
+          "PATH": "C:\\Program Files\\nodejs;${env:PATH}"
+        }
+      }
+    }
+  ]
+}

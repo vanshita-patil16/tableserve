@@ -1,0 +1,9 @@
+{
+  "terminal.integrated.env.windows": {
+    "PATH": "C:\\Program Files\\nodejs;${env:PATH}"
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/node_modules": false
+  }
+}
