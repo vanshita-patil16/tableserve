@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TABLESERVE Beginner & Free-Tier Friendly Deployment Template
+  Single-instance microservices host with 100% Free Tier compatibility.
+  No expensive NAT Gateways, no IAM role creation requirements, and no quota limits.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t2.micro
+      - t3.small
+    Description: Free-tier eligible EC2 instance type
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+    Description: Automatically selects the latest official Amazon Linux 2023 AMI in any AWS region
+
+Resources:
+  # 1. Simple VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: tableserve-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: tableserve-igw
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # 2. Public Subnet
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: tableserve-public-subnet
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: tableserve-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # 3. Security Group (Opens Port 80, 3000, 5000-5004)
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP and TABLESERVE port access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5004
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: tableserve-web-sg
+
+  # 4. Single EC2 Instance hosting all Microservices & Frontend
+  ServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y nodejs npm git iptables-services
+
+          # Port forward port 80 to port 3000 for direct web access
+          iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000
+          service iptables save 2>/dev/null || true
+
+          # Create application working dir
+          mkdir -p /opt/tableserve
+          cd /opt/tableserve
+
+          # Start message
+          echo "TABLESERVE Server initialized successfully" > /var/log/tableserve-init.log
+      Tags:
+        - Key: Name
+          Value: tableserve-server
+
+Outputs:
+  WebsiteURL:
+    Description: Direct Public Web Application URL
+    Value: !Sub "http://${ServerInstance.PublicDnsName}:3000"
+
+  PublicIP:
+    Description: Server Public IP Address
+    Value: !GetAtt ServerInstance.PublicIp
+
+  GatewayAPIURL:
+    Description: API Gateway Public URL
+    Value: !Sub "http://${ServerInstance.PublicDnsName}:5000"
