@@ -4,20 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TABLESERVE | Restaurant Reservation & Ordering Platform</title>
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind CSS CDN -->
+
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
-            fontFamily: {
-              sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            },
             colors: {
               brand: {
                 50: '#fff7ed',
@@ -32,21 +25,47 @@
       }
     </script>
 
-    <!-- Custom CSS -->
+    <!-- Global CSS -->
     <link rel="stylesheet" href="/src/index.css" />
 
-    <!-- React 18 and Babel Standalone for Seamless Zero-Build Local Execution -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Error Catch Overlay -->
+    <script>
+      window.addEventListener('error', function(e) {
+        var errBox = document.getElementById('debug-error-box');
+        if (errBox) {
+          errBox.style.display = 'block';
+          errBox.innerHTML = '<strong>Frontend Error:</strong> ' + e.message + ' at ' + e.filename + ':' + e.lineno;
+        }
+      });
+    </script>
+
+    <!-- Local Offline-Ready React 18 Core -->
+    <script src="/vendor/react.production.min.js"></script>
+    <script src="/vendor/react-dom.production.min.js"></script>
+
+    <!-- CDN Fallback in case local fails -->
+    <script>
+      if (typeof React === 'undefined') {
+        document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"><\/script>');
+        document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"><\/script>');
+      }
+    </script>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-orange-500 selection:text-white min-h-screen flex flex-col">
-    <div id="root"></div>
+    <!-- Visible Error Container for Debugging -->
+    <div id="debug-error-box" style="display:none; padding:16px; background:#fee2e2; color:#b91c1c; border-bottom:2px solid #ef4444; font-family:monospace; font-size:12px; z-index:99999;"></div>
 
-    <!-- Application Script compiled by Babel Standalone -->
-    <script type="text/babel" data-presets="react" src="/src/App.jsx"></script>
+    <!-- React Root Mount -->
+    <div id="root">
+      <!-- Loading Placeholder while JS hydrates -->
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: system-ui, sans-serif;">
+        <div style="width: 48px; height: 48px; border: 4px solid #f97316; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <p style="margin-top: 16px; color: #64748b; font-weight: 600; font-size: 14px;">Loading TABLESERVE Platform...</p>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+      </div>
+    </div>
+
+    <!-- Pre-Compiled Vanilla JavaScript Application (Zero Babel Compilation Required in Browser) -->
+    <script src="/App.js"></script>
   </body>
 </html>

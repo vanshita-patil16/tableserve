@@ -3,8 +3,20 @@
  * Spawns all 4 backend microservices, the API Gateway Hub, and the React Frontend
  */
 
-const { fork } = require('child_process');
+const { fork, execSync } = require('child_process');
 const path = require('path');
+
+console.log('====================================================');
+console.log('🍴 STARTING TABLESERVE FULL MICROSERVICES & FRONTEND');
+console.log('====================================================\n');
+
+// 1. Precompile React client code so zero runtime Babel compilation is needed in browser
+try {
+  console.log('[ORCHESTRATOR] Pre-compiling React frontend client application...');
+  execSync('node build-client.js', { stdio: 'inherit' });
+} catch (e) {
+  console.warn('[ORCHESTRATOR] Client compilation warning:', e.message);
+}
 
 const services = [
   { name: 'Restaurant Service', script: 'services/restaurant-service/server.js', port: 5001 },
@@ -14,10 +26,6 @@ const services = [
   { name: 'API Gateway Hub', script: 'services/api-gateway/server.js', port: 5000 },
   { name: 'React Frontend App', script: 'frontend/server.cjs', port: 3000 }
 ];
-
-console.log('====================================================');
-console.log('🍴 STARTING TABLESERVE FULL MICROSERVICES & FRONTEND');
-console.log('====================================================\n');
 
 const runningProcesses = [];
 

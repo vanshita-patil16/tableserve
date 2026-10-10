@@ -7,9 +7,10 @@ const PORT = process.env.PORT || 3000;
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:5000';
 
 // Serve static frontend assets
-app.use(express.static(__dirname));
+app.use('/vendor', express.static(path.join(__dirname, 'public/vendor')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/src', express.static(path.join(__dirname, 'src')));
+app.use(express.static(__dirname));
 
 // Proxy /api requests to API Gateway (port 5000)
 app.use('/api', (req, res) => {
@@ -46,9 +47,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`🌐 [TABLESERVE Frontend] running on http://localhost:${PORT}`);
-  console.log(`   Proxies API requests to API Gateway: ${GATEWAY_URL}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🌐 [TABLESERVE Frontend] running on http://localhost:${PORT}`);
+    console.log(`   Proxies API requests to API Gateway: ${GATEWAY_URL}`);
+  });
+}
 
 module.exports = app;
