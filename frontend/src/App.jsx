@@ -15,6 +15,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [activeCuisine, setActiveCuisine] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState('');
   const [priceFilter, setPriceFilter] = useState('');
   const [minRatingFilter, setMinRatingFilter] = useState('');
@@ -74,7 +75,7 @@ function App() {
   // Initialize and load restaurants
   useEffect(() => {
     fetchRestaurants();
-  }, [activeCuisine, searchQuery, dietaryFilter, priceFilter, minRatingFilter]);
+  }, [activeCuisine, searchQuery, cityFilter, dietaryFilter, priceFilter, minRatingFilter]);
 
   // Load user data on auth change
   useEffect(() => {
@@ -96,6 +97,7 @@ function App() {
       const params = new URLSearchParams();
       if (activeCuisine !== 'All') params.append('cuisine', activeCuisine);
       if (searchQuery) params.append('q', searchQuery);
+      if (cityFilter && cityFilter !== 'All Cities') params.append('city', cityFilter);
       if (dietaryFilter) params.append('dietary', dietaryFilter);
       if (priceFilter) params.append('priceTier', priceFilter);
       if (minRatingFilter) params.append('minRating', minRatingFilter);
@@ -465,7 +467,32 @@ function App() {
     }
   };
 
-  const cuisinesList = ['All', 'Italian', 'Japanese', 'Indian', 'French', 'Mexican', 'Steakhouse'];
+  const cuisinesList = [
+    'All',
+    'North Indian',
+    'South Indian',
+    'Biryani & Mughlai',
+    'Coastal Seafood',
+    'Rajasthani & Thali',
+    'Pan-Asian',
+    'Bengali',
+    'Street Food & Chaat',
+    'Modern Indian',
+    'Continental'
+  ];
+
+  const citiesList = [
+    'All Cities',
+    'New Delhi',
+    'Mumbai',
+    'Bengaluru',
+    'Hyderabad',
+    'Chennai',
+    'Kolkata',
+    'Jaipur',
+    'Goa',
+    'Ahmedabad'
+  ];
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -593,7 +620,7 @@ function App() {
               <span className="text-slate-400">🔍</span>
               <input
                 type="text"
-                placeholder="Search restaurants, cuisines (Italian, Japanese, Indian), or signature dishes..."
+                placeholder="Search restaurants, cuisines (Biryani, North Indian, Seafood), dishes (Dal Bukhara, Dosa), or cities (Delhi, Mumbai, Bengaluru)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full text-sm font-medium focus:outline-none bg-transparent"
@@ -635,6 +662,19 @@ function App() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Filters:</span>
 
+            {/* City Filter */}
+            <select
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-orange-500"
+            >
+              {citiesList.map(city => (
+                <option key={city} value={city === 'All Cities' ? '' : city}>
+                  📍 {city}
+                </option>
+              ))}
+            </select>
+
             {/* Dietary Filter */}
             <select
               value={dietaryFilter}
@@ -642,10 +682,12 @@ function App() {
               className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-orange-500"
             >
               <option value="">🌱 All Dietary Options</option>
+              <option value="Pure Veg">Pure Veg</option>
               <option value="Vegetarian">Vegetarian</option>
-              <option value="Vegan">Vegan</option>
+              <option value="Jain">Jain Friendly</option>
+              <option value="Halal">Halal Certified</option>
               <option value="Gluten-Free">Gluten-Free</option>
-              <option value="Halal">Halal</option>
+              <option value="Vegan">Vegan</option>
             </select>
 
             {/* Price Tier */}
@@ -654,11 +696,11 @@ function App() {
               onChange={(e) => setPriceFilter(e.target.value)}
               className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-orange-500"
             >
-              <option value="">💲 Any Price Tier</option>
-              <option value="$">$ (Under $15)</option>
-              <option value="$$">$$ ($15 - $30)</option>
-              <option value="$$$">$$$ ($30 - $60)</option>
-              <option value="$$$$">$$$$ (Fine Dining)</option>
+              <option value="">₹ Any Price Tier</option>
+              <option value="₹">₹ (Budget / Street Food)</option>
+              <option value="₹₹">₹₹ (Casual & Mid-Range)</option>
+              <option value="₹₹₹">₹₹₹ (Premium & Signature)</option>
+              <option value="₹₹₹₹">₹₹₹₹ (Luxury & Fine Dining)</option>
             </select>
 
             {/* Rating Filter */}
@@ -673,9 +715,10 @@ function App() {
               <option value="4.9">4.9+ Top Rated</option>
             </select>
 
-            {(dietaryFilter || priceFilter || minRatingFilter || searchQuery || activeCuisine !== 'All') && (
+            {(cityFilter || dietaryFilter || priceFilter || minRatingFilter || searchQuery || activeCuisine !== 'All') && (
               <button
                 onClick={() => {
+                  setCityFilter('');
                   setDietaryFilter('');
                   setPriceFilter('');
                   setMinRatingFilter('');
@@ -773,7 +816,7 @@ function App() {
                         <div className="mt-1 flex flex-wrap gap-1.5">
                           {restaurant.featuredDishes.map(d => (
                             <span key={d.id} className="text-[11px] bg-slate-50 border border-slate-200 text-slate-700 px-2 py-0.5 rounded-md">
-                              {d.name} (${d.price})
+                              {d.name} (₹{d.price})
                             </span>
                           ))}
                         </div>
@@ -874,7 +917,7 @@ function App() {
                       </div>
 
                       <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-sm font-black text-slate-900">${Number(item.price).toFixed(2)}</span>
+                        <span className="text-sm font-black text-slate-900">₹{Number(item.price).toFixed(2)}</span>
                         <button
                           onClick={() => addToCart(item, selectedRestaurant)}
                           className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1"
@@ -1080,7 +1123,7 @@ function App() {
                         <div key={item.id} className="flex items-center justify-between border-b border-slate-100 pb-3">
                           <div className="flex-1">
                             <h4 className="text-xs font-bold text-slate-900">{item.name}</h4>
-                            <span className="text-xs text-slate-500">${Number(item.price).toFixed(2)} each</span>
+                            <span className="text-xs text-slate-500">₹{Number(item.price).toFixed(2)} each</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <button
@@ -1097,7 +1140,7 @@ function App() {
                               +
                             </button>
                             <span className="text-xs font-black text-slate-900 w-16 text-right">
-                              ${(item.price * item.quantity).toFixed(2)}
+                              ₹{(item.price * item.quantity).toFixed(2)}
                             </span>
                           </div>
                         </div>
@@ -1160,14 +1203,14 @@ function App() {
                 <div className="p-6 bg-slate-50 border-t border-slate-200">
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-sm font-bold text-slate-600">Total Amount</span>
-                    <span className="text-xl font-black text-slate-900">${cartTotal.toFixed(2)}</span>
+                    <span className="text-xl font-black text-slate-900">₹{cartTotal.toFixed(2)}</span>
                   </div>
                   <button
                     onClick={handleProceedToPayment}
                     className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-orange-600/20 transition flex items-center justify-center gap-2"
                   >
                     <span>💳</span>
-                    <span>Checkout & Pay (${cartTotal.toFixed(2)})</span>
+                    <span>Checkout & Pay (₹{cartTotal.toFixed(2)})</span>
                   </button>
                 </div>
               )}
@@ -1187,7 +1230,7 @@ function App() {
 
             <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl mb-4">
               <span className="text-xs text-orange-700 font-bold">Total Amount Due</span>
-              <p className="text-2xl font-black text-orange-900">${Number(paymentData.amount).toFixed(2)}</p>
+              <p className="text-2xl font-black text-orange-900">₹{Number(paymentData.amount).toFixed(2)}</p>
             </div>
 
             <p className="text-xs text-slate-500 mb-4">
@@ -1301,7 +1344,7 @@ function App() {
                         <span className="text-xs text-slate-500">Order #{order.id} • {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-black text-slate-900">${Number(order.total_amount).toFixed(2)}</span>
+                        <span className="text-sm font-black text-slate-900">₹{Number(order.total_amount).toFixed(2)}</span>
                         <div>
                           <span className={`inline-block mt-0.5 text-[10px] font-black px-2 py-0.5 rounded-full ${
                             order.status === 'READY' ? 'bg-green-100 text-green-800' :
@@ -1515,14 +1558,14 @@ function App() {
                   onClick={() => handleQuickLogin('CUSTOMER')}
                   className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition"
                 >
-                  👤 Demo Customer
+                  👤 Customer (Aarav)
                 </button>
                 <button
                   type="button"
                   onClick={() => handleQuickLogin('ADMIN')}
                   className="py-2 px-3 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold rounded-xl transition"
                 >
-                  ⚡ Demo Admin
+                  ⚡ Admin (Supervisor)
                 </button>
               </div>
 
@@ -1620,16 +1663,16 @@ function App() {
             {/* Quick Suggested Prompt Chips */}
             <div className="px-3 py-2 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto text-[11px]">
               <button
-                onClick={() => handleSendChatMessage('Find Italian restaurants')}
+                onClick={() => handleSendChatMessage('Find Biryani in Hyderabad')}
                 className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
               >
-                🍝 Find Italian
+                🍛 Find Biryani
               </button>
               <button
-                onClick={() => handleSendChatMessage('Show menu for Bella Italia')}
+                onClick={() => handleSendChatMessage('Show menu for Bukhara')}
                 className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
               >
-                📖 View Menu
+                📖 Bukhara Menu
               </button>
               <button
                 onClick={() => handleSendChatMessage('Check my reservation status')}

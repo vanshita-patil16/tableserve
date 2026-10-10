@@ -102,13 +102,19 @@ app.get('/search', async (req, res) => {
     // 2. Filter by Cuisine
     if (cuisineStr && cuisineStr.trim()) {
       const c = cuisineStr.trim().toLowerCase();
-      restaurants = restaurants.filter(r => (r.cuisine || '').toLowerCase() === c);
+      restaurants = restaurants.filter(r => {
+        const rCuisine = (r.cuisine || '').toLowerCase();
+        return rCuisine === c || rCuisine.includes(c) || c.includes(rCuisine);
+      });
     }
 
     // 3. Filter by City
     if (cityStr && cityStr.trim()) {
       const ct = cityStr.trim().toLowerCase();
-      restaurants = restaurants.filter(r => (r.city || '').toLowerCase() === ct);
+      restaurants = restaurants.filter(r => {
+        const rCity = (r.city || '').toLowerCase();
+        return rCity === ct || rCity.includes(ct) || ct.includes(rCity);
+      });
     }
 
     // 4. Filter by Minimum Rating

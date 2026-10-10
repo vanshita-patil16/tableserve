@@ -20,6 +20,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [activeCuisine, setActiveCuisine] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState('');
   const [priceFilter, setPriceFilter] = useState('');
   const [minRatingFilter, setMinRatingFilter] = useState('');
@@ -84,7 +85,7 @@ function App() {
   // Initialize and load restaurants
   useEffect(() => {
     fetchRestaurants();
-  }, [activeCuisine, searchQuery, dietaryFilter, priceFilter, minRatingFilter]);
+  }, [activeCuisine, searchQuery, cityFilter, dietaryFilter, priceFilter, minRatingFilter]);
 
   // Load user data on auth change
   useEffect(() => {
@@ -108,6 +109,7 @@ function App() {
       const params = new URLSearchParams();
       if (activeCuisine !== 'All') params.append('cuisine', activeCuisine);
       if (searchQuery) params.append('q', searchQuery);
+      if (cityFilter && cityFilter !== 'All Cities') params.append('city', cityFilter);
       if (dietaryFilter) params.append('dietary', dietaryFilter);
       if (priceFilter) params.append('priceTier', priceFilter);
       if (minRatingFilter) params.append('minRating', minRatingFilter);
@@ -525,7 +527,8 @@ function App() {
       setChatLoading(false);
     }
   };
-  const cuisinesList = ['All', 'Italian', 'Japanese', 'Indian', 'French', 'Mexican', 'Steakhouse'];
+  const cuisinesList = ['All', 'North Indian', 'South Indian', 'Biryani & Mughlai', 'Coastal Seafood', 'Rajasthani & Thali', 'Pan-Asian', 'Bengali', 'Street Food & Chaat', 'Modern Indian', 'Continental'];
+  const citiesList = ['All Cities', 'New Delhi', 'Mumbai', 'Bengaluru', 'Hyderabad', 'Chennai', 'Kolkata', 'Jaipur', 'Goa', 'Ahmedabad'];
   return /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col min-h-screen"
   }, /*#__PURE__*/React.createElement("header", {
@@ -607,7 +610,7 @@ function App() {
     className: "text-slate-400"
   }, "🔍"), /*#__PURE__*/React.createElement("input", {
     type: "text",
-    placeholder: "Search restaurants, cuisines (Italian, Japanese, Indian), or signature dishes...",
+    placeholder: "Search restaurants, cuisines (Biryani, North Indian, Seafood), dishes (Dal Bukhara, Dosa), or cities (Delhi, Mumbai, Bengaluru)...",
     value: searchQuery,
     onChange: e => setSearchQuery(e.target.value),
     className: "w-full text-sm font-medium focus:outline-none bg-transparent"
@@ -632,34 +635,45 @@ function App() {
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-xs font-bold text-slate-400 uppercase tracking-wider"
   }, "Filters:"), /*#__PURE__*/React.createElement("select", {
+    value: cityFilter,
+    onChange: e => setCityFilter(e.target.value),
+    className: "text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-orange-500"
+  }, citiesList.map(city => /*#__PURE__*/React.createElement("option", {
+    key: city,
+    value: city === 'All Cities' ? '' : city
+  }, "📍 ", city))), /*#__PURE__*/React.createElement("select", {
     value: dietaryFilter,
     onChange: e => setDietaryFilter(e.target.value),
     className: "text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-orange-500"
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
   }, "🌱 All Dietary Options"), /*#__PURE__*/React.createElement("option", {
+    value: "Pure Veg"
+  }, "Pure Veg"), /*#__PURE__*/React.createElement("option", {
     value: "Vegetarian"
   }, "Vegetarian"), /*#__PURE__*/React.createElement("option", {
-    value: "Vegan"
-  }, "Vegan"), /*#__PURE__*/React.createElement("option", {
+    value: "Jain"
+  }, "Jain Friendly"), /*#__PURE__*/React.createElement("option", {
+    value: "Halal"
+  }, "Halal Certified"), /*#__PURE__*/React.createElement("option", {
     value: "Gluten-Free"
   }, "Gluten-Free"), /*#__PURE__*/React.createElement("option", {
-    value: "Halal"
-  }, "Halal")), /*#__PURE__*/React.createElement("select", {
+    value: "Vegan"
+  }, "Vegan")), /*#__PURE__*/React.createElement("select", {
     value: priceFilter,
     onChange: e => setPriceFilter(e.target.value),
     className: "text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-orange-500"
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
-  }, "💲 Any Price Tier"), /*#__PURE__*/React.createElement("option", {
-    value: "$"
-  }, "$ (Under $15)"), /*#__PURE__*/React.createElement("option", {
-    value: "$$"
-  }, "$$ ($15 - $30)"), /*#__PURE__*/React.createElement("option", {
-    value: "$$$"
-  }, "$$$ ($30 - $60)"), /*#__PURE__*/React.createElement("option", {
-    value: "$$$$"
-  }, "$$$$ (Fine Dining)")), /*#__PURE__*/React.createElement("select", {
+  }, "₹ Any Price Tier"), /*#__PURE__*/React.createElement("option", {
+    value: "₹"
+  }, "₹ (Budget / Street Food)"), /*#__PURE__*/React.createElement("option", {
+    value: "₹₹"
+  }, "₹₹ (Casual & Mid-Range)"), /*#__PURE__*/React.createElement("option", {
+    value: "₹₹₹"
+  }, "₹₹₹ (Premium & Signature)"), /*#__PURE__*/React.createElement("option", {
+    value: "₹₹₹₹"
+  }, "₹₹₹₹ (Luxury & Fine Dining)")), /*#__PURE__*/React.createElement("select", {
     value: minRatingFilter,
     onChange: e => setMinRatingFilter(e.target.value),
     className: "text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-orange-500"
@@ -671,8 +685,9 @@ function App() {
     value: "4.7"
   }, "4.7+ Stars"), /*#__PURE__*/React.createElement("option", {
     value: "4.9"
-  }, "4.9+ Top Rated")), (dietaryFilter || priceFilter || minRatingFilter || searchQuery || activeCuisine !== 'All') && /*#__PURE__*/React.createElement("button", {
+  }, "4.9+ Top Rated")), (cityFilter || dietaryFilter || priceFilter || minRatingFilter || searchQuery || activeCuisine !== 'All') && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
+      setCityFilter('');
       setDietaryFilter('');
       setPriceFilter('');
       setMinRatingFilter('');
@@ -752,7 +767,7 @@ function App() {
   }, restaurant.featuredDishes.map(d => /*#__PURE__*/React.createElement("span", {
     key: d.id,
     className: "text-[11px] bg-slate-50 border border-slate-200 text-slate-700 px-2 py-0.5 rounded-md"
-  }, d.name, " ($", d.price, ")"))))), /*#__PURE__*/React.createElement("div", {
+  }, d.name, " (₹", d.price, ")"))))), /*#__PURE__*/React.createElement("div", {
     className: "mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => handleOpenReservation(restaurant),
@@ -819,7 +834,7 @@ function App() {
     className: "mt-3 pt-2 border-t border-slate-100 flex items-center justify-between"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-black text-slate-900"
-  }, "$", Number(item.price).toFixed(2)), /*#__PURE__*/React.createElement("button", {
+  }, "₹", Number(item.price).toFixed(2)), /*#__PURE__*/React.createElement("button", {
     onClick: () => addToCart(item, selectedRestaurant),
     className: "bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1"
   }, /*#__PURE__*/React.createElement("span", null, "+"), /*#__PURE__*/React.createElement("span", null, "Add to Order"))))))))), reservingRestaurant && /*#__PURE__*/React.createElement("div", {
@@ -955,7 +970,7 @@ function App() {
     className: "text-xs font-bold text-slate-900"
   }, item.name), /*#__PURE__*/React.createElement("span", {
     className: "text-xs text-slate-500"
-  }, "$", Number(item.price).toFixed(2), " each")), /*#__PURE__*/React.createElement("div", {
+  }, "₹", Number(item.price).toFixed(2), " each")), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center space-x-2"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => updateCartQty(item.id, -1),
@@ -967,7 +982,7 @@ function App() {
     className: "w-6 h-6 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs hover:bg-slate-200"
   }, "+"), /*#__PURE__*/React.createElement("span", {
     className: "text-xs font-black text-slate-900 w-16 text-right"
-  }, "$", (item.price * item.quantity).toFixed(2)))))), /*#__PURE__*/React.createElement("div", {
+  }, "₹", (item.price * item.quantity).toFixed(2)))))), /*#__PURE__*/React.createElement("div", {
     className: "mt-6 pt-4 border-t border-slate-200 space-y-3"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     className: "block text-xs font-bold text-slate-700 mb-1"
@@ -1003,10 +1018,10 @@ function App() {
     className: "text-sm font-bold text-slate-600"
   }, "Total Amount"), /*#__PURE__*/React.createElement("span", {
     className: "text-xl font-black text-slate-900"
-  }, "$", cartTotal.toFixed(2))), /*#__PURE__*/React.createElement("button", {
+  }, "₹", cartTotal.toFixed(2))), /*#__PURE__*/React.createElement("button", {
     onClick: handleProceedToPayment,
     className: "w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-orange-600/20 transition flex items-center justify-center gap-2"
-  }, /*#__PURE__*/React.createElement("span", null, "💳"), /*#__PURE__*/React.createElement("span", null, "Checkout & Pay ($", cartTotal.toFixed(2), ")")))))), showPaymentModal && paymentData && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "💳"), /*#__PURE__*/React.createElement("span", null, "Checkout & Pay (₹", cartTotal.toFixed(2), ")")))))), showPaymentModal && paymentData && /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl animate-slide-up"
@@ -1023,7 +1038,7 @@ function App() {
     className: "text-xs text-orange-700 font-bold"
   }, "Total Amount Due"), /*#__PURE__*/React.createElement("p", {
     className: "text-2xl font-black text-orange-900"
-  }, "$", Number(paymentData.amount).toFixed(2))), /*#__PURE__*/React.createElement("p", {
+  }, "₹", Number(paymentData.amount).toFixed(2))), /*#__PURE__*/React.createElement("p", {
     className: "text-xs text-slate-500 mb-4"
   }, "Select one of the mock test cards below to simulate instant payment gateway authorization:"), /*#__PURE__*/React.createElement("div", {
     className: "space-y-3"
@@ -1119,7 +1134,7 @@ function App() {
     className: "text-right"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-black text-slate-900"
-  }, "$", Number(order.total_amount).toFixed(2)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+  }, "₹", Number(order.total_amount).toFixed(2)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     className: `inline-block mt-0.5 text-[10px] font-black px-2 py-0.5 rounded-full ${order.status === 'READY' ? 'bg-green-100 text-green-800' : order.status === 'PREPARING' ? 'bg-amber-100 text-amber-800' : order.status === 'SERVED' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-700'}`
   }, "Status: ", order.status)))), order.items && order.items.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "mt-3 pt-2 border-t border-slate-200 flex flex-wrap gap-2"
@@ -1295,11 +1310,11 @@ function App() {
     type: "button",
     onClick: () => handleQuickLogin('CUSTOMER'),
     className: "py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition"
-  }, "👤 Demo Customer"), /*#__PURE__*/React.createElement("button", {
+  }, "👤 Customer (Aarav)"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => handleQuickLogin('ADMIN'),
     className: "py-2 px-3 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold rounded-xl transition"
-  }, "⚡ Demo Admin")), /*#__PURE__*/React.createElement("div", {
+  }, "⚡ Admin (Supervisor)")), /*#__PURE__*/React.createElement("div", {
     className: "mt-4"
   }, /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -1371,12 +1386,12 @@ function App() {
   })), /*#__PURE__*/React.createElement("div", {
     className: "px-3 py-2 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto text-[11px]"
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleSendChatMessage('Find Italian restaurants'),
+    onClick: () => handleSendChatMessage('Find Biryani in Hyderabad'),
     className: "whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
-  }, "🍝 Find Italian"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleSendChatMessage('Show menu for Bella Italia'),
+  }, "🍛 Find Biryani"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleSendChatMessage('Show menu for Bukhara'),
     className: "whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
-  }, "📖 View Menu"), /*#__PURE__*/React.createElement("button", {
+  }, "📖 Bukhara Menu"), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleSendChatMessage('Check my reservation status'),
     className: "whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
   }, "📅 My Status"), /*#__PURE__*/React.createElement("button", {

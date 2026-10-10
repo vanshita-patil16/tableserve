@@ -35,7 +35,7 @@ CREATE TABLE restaurants (
     phone VARCHAR(30),
     image_url TEXT,
     rating NUMERIC(3, 2) DEFAULT 4.5,
-    price_tier VARCHAR(10) DEFAULT '$$' CHECK (price_tier IN ('$', '$$', '$$$', '$$$$')),
+    price_tier VARCHAR(10) DEFAULT '₹₹' CHECK (price_tier IN ('$', '$$', '$$$', '$$$$', '₹', '₹₹', '₹₹₹', '₹₹₹₹')),
     opening_time VARCHAR(10) DEFAULT '11:00',
     closing_time VARCHAR(10) DEFAULT '23:00',
     total_tables INT DEFAULT 12,

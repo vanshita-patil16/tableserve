@@ -313,47 +313,62 @@ app.post('/api/chatbot/message', async (req, res) => {
     let actionData = null;
 
     // 1. GreetingIntent
-    if (text.match(/^(hi|hello|hey|good morning|good afternoon|good evening|greetings)\b/)) {
+    if (text.match(/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|namaste)\b/)) {
       responseIntent = 'GreetingIntent';
-      replyText = `Hello! Welcome to TABLESERVE! 👋 I'm your dining concierge. I can help you search restaurants, view menus, make or cancel table reservations, and track order statuses. What would you like to do today?`;
+      replyText = `Namaste! Welcome to TABLESERVE! 👋 I'm your dining concierge powered by Amazon Lex. I can help you discover top Indian restaurants across Delhi, Mumbai, Bengaluru, Chennai, Kolkata, and Hyderabad, explore signature menus, book table reservations, and track your orders. What are you craving today?`;
     }
     // 2. HelpIntent
     else if (text.includes('help') || text.includes('what can you do') || text.includes('how to use')) {
       responseIntent = 'HelpIntent';
-      replyText = `Here is what I can do for you:\n• "Search restaurants" (e.g., "Find Italian restaurants in New York")\n• "View menu" (e.g., "Show menu for Bella Italia")\n• "Reserve a table" (e.g., "Book table at Bella Italia for 2")\n• "Check my reservation" (e.g., "Check status of res-01")\n• "Cancel reservation" (e.g., "Cancel res-01")\n• "Order food" (e.g., browse menu and add to cart)`;
+      replyText = `Here is what I can do for you:\n• "Search restaurants" (e.g., "Find Biryani in Hyderabad" or "North Indian in Delhi")\n• "View menu" (e.g., "Show menu for Bukhara" or "Saravanaa Bhavan")\n• "Reserve a table" (e.g., "Book table at Bukhara for 4")\n• "Check my reservation" (e.g., "Check status of res-01")\n• "Cancel reservation" (e.g., "Cancel res-01")\n• "Order food" (e.g., browse menu and add to cart)`;
     }
     // 3. RestaurantSearchIntent
     else if (text.includes('search') || text.includes('find') || text.includes('recommend') ||
-             text.includes('italian') || text.includes('japanese') || text.includes('sushi') ||
-             text.includes('indian') || text.includes('steakhouse') || text.includes('mexican') || text.includes('french')) {
+             text.includes('north indian') || text.includes('south indian') || text.includes('biryani') ||
+             text.includes('seafood') || text.includes('bengali') || text.includes('rajasthani') ||
+             text.includes('thali') || text.includes('chaat') || text.includes('street food') ||
+             text.includes('asian') || text.includes('continental') || text.includes('dosa') ||
+             text.includes('delhi') || text.includes('mumbai') || text.includes('bangalore') ||
+             text.includes('bengaluru') || text.includes('hyderabad') || text.includes('chennai') ||
+             text.includes('kolkata') || text.includes('jaipur') || text.includes('goa')) {
       responseIntent = 'RestaurantSearchIntent';
 
       let matched = restaurants;
-      if (text.includes('italian')) matched = restaurants.filter(r => r.cuisine === 'Italian');
-      else if (text.includes('japanese') || text.includes('sushi')) matched = restaurants.filter(r => r.cuisine === 'Japanese');
-      else if (text.includes('indian') || text.includes('curry')) matched = restaurants.filter(r => r.cuisine === 'Indian');
-      else if (text.includes('french')) matched = restaurants.filter(r => r.cuisine === 'French');
-      else if (text.includes('mexican') || text.includes('taco')) matched = restaurants.filter(r => r.cuisine === 'Mexican');
-      else if (text.includes('steak')) matched = restaurants.filter(r => r.cuisine === 'Steakhouse');
+      if (text.includes('biryani')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('biryani') || r.name.toLowerCase().includes('biryani'));
+      else if (text.includes('south indian') || text.includes('dosa') || text.includes('idli')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('south indian'));
+      else if (text.includes('north indian') || text.includes('tandoor') || text.includes('butter chicken')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('north indian'));
+      else if (text.includes('seafood') || text.includes('fish') || text.includes('crab')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('seafood'));
+      else if (text.includes('bengali')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('bengali'));
+      else if (text.includes('rajasthani') || text.includes('thali') || text.includes('gujarati')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('rajasthani') || r.cuisine.toLowerCase().includes('thali'));
+      else if (text.includes('street food') || text.includes('chaat') || text.includes('bhature')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('street food'));
+      else if (text.includes('asian') || text.includes('bao') || text.includes('dim sum')) matched = restaurants.filter(r => r.cuisine.toLowerCase().includes('asian'));
+      else if (text.includes('hyderabad')) matched = restaurants.filter(r => r.city.toLowerCase().includes('hyderabad'));
+      else if (text.includes('delhi')) matched = restaurants.filter(r => r.city.toLowerCase().includes('delhi'));
+      else if (text.includes('mumbai')) matched = restaurants.filter(r => r.city.toLowerCase().includes('mumbai'));
+      else if (text.includes('bengaluru') || text.includes('bangalore')) matched = restaurants.filter(r => r.city.toLowerCase().includes('bengaluru'));
+      else if (text.includes('chennai')) matched = restaurants.filter(r => r.city.toLowerCase().includes('chennai'));
+      else if (text.includes('kolkata')) matched = restaurants.filter(r => r.city.toLowerCase().includes('kolkata'));
+      else if (text.includes('jaipur')) matched = restaurants.filter(r => r.city.toLowerCase().includes('jaipur'));
+      else if (text.includes('goa')) matched = restaurants.filter(r => r.city.toLowerCase().includes('goa'));
 
       if (matched.length > 0) {
         const topRest = matched[0];
-        replyText = `I found ${matched.length} great option(s)! Top pick: **${topRest.name}** (${topRest.cuisine}, rated ${topRest.rating}★). Located at ${topRest.address}, ${topRest.city}. Would you like to view its menu or book a table?`;
-        actionData = { type: 'RESTAURANTS_FOUND', list: matched.map(r => ({ id: r.id, name: r.name, cuisine: r.cuisine, rating: r.rating })) };
+        replyText = `I found ${matched.length} great restaurant(s)! Top recommendation: **${topRest.name}** (${topRest.cuisine}, rated ${topRest.rating}★). Located at ${topRest.address}, ${topRest.city}. Would you like to view its menu or reserve a table?`;
+        actionData = { type: 'RESTAURANTS_FOUND', list: matched.map(r => ({ id: r.id, name: r.name, cuisine: r.cuisine, city: r.city, rating: r.rating })) };
       } else {
-        replyText = `I couldn't find a restaurant matching that exact query. We have great Italian, Japanese, Indian, French, Mexican, and Steakhouse restaurants available!`;
+        replyText = `I couldn't find a restaurant matching that exact query. We have 18 top Indian dining destinations across North Indian, South Indian, Biryani & Mughlai, Coastal Seafood, Bengali, Rajasthani Thali, and Street Food!`;
       }
     }
     // 4. MenuIntent
     else if (text.includes('menu') || text.includes('dishes') || text.includes('food') || text.includes('eat')) {
       responseIntent = 'MenuIntent';
       // Look for restaurant name mentioned
-      const matchedRest = restaurants.find(r => text.includes(r.name.toLowerCase()) || text.includes(r.cuisine.toLowerCase()));
+      const matchedRest = restaurants.find(r => text.includes(r.name.toLowerCase()) || text.includes(r.cuisine.toLowerCase()) || text.includes(r.city.toLowerCase()));
       const targetRest = matchedRest || restaurants[0];
       const items = menuItems.filter(m => m.restaurant_id === targetRest.id);
 
-      const highlights = items.slice(0, 3).map(i => `• ${i.name} ($${i.price}) - ${i.category}`).join('\n');
-      replyText = `Here are signature highlights from **${targetRest.name}**:\n${highlights}\n\nYou can order these directly or view the full menu in the restaurant view!`;
+      const highlights = items.slice(0, 3).map(i => `• ${i.name} (₹${i.price}) - ${i.category}`).join('\n');
+      replyText = `Here are signature highlights from **${targetRest.name}** in ${targetRest.city}:\n${highlights}\n\nYou can order these directly or reserve a table!`;
       actionData = { type: 'MENU_SHOWN', restaurantId: targetRest.id, items };
     }
     // 5. CancelReservationIntent
@@ -389,7 +404,7 @@ app.post('/api/chatbot/message', async (req, res) => {
         replyText = `Reservation **#${targetRes.id}** at **${rest ? rest.name : 'Restaurant'}** is **${targetRes.status}** for ${targetRes.guests} guests on ${targetRes.reservation_date} at ${targetRes.time_slot}.`;
         actionData = { type: 'RESERVATION_DETAILS', reservation: targetRes };
       } else {
-        replyText = `You don't currently have any active reservations. Would you like to book a table at one of our restaurants?`;
+        replyText = `You don't currently have any active reservations. Would you like to book a table at one of our 18 Indian restaurants?`;
       }
     }
     // 7. ReservationIntent
@@ -397,15 +412,15 @@ app.post('/api/chatbot/message', async (req, res) => {
       responseIntent = 'ReservationIntent';
       const matchedRest = restaurants.find(r => text.includes(r.name.toLowerCase()));
       if (matchedRest) {
-        replyText = `I'd love to help you book a table at **${matchedRest.name}**! Click "Book Table" on the restaurant card or tell me your preferred date (e.g., 2026-10-15), time slot (e.g., 19:00), and number of guests.`;
+        replyText = `I'd love to help you book a table at **${matchedRest.name}** in ${matchedRest.city}! Click "Book Table" on the restaurant card or select your date, time slot, and guest count.`;
       } else {
-        replyText = `Certainly! Which restaurant would you like to book a table at? We have Bella Italia, Sakura Bistro, Spice Symphony, Le Petit Bouchon, El Fuego, and The Prime Oakhouse.`;
+        replyText = `Certainly! Which restaurant would you like to book a table at? We have Bukhara (Delhi), Saravanaa Bhavan (Chennai), Paradise Biryani (Hyderabad), Trishna (Mumbai), Chokhi Dhani (Jaipur), and more!`;
       }
     }
     // 8. FallbackIntent
     else {
       responseIntent = 'FallbackIntent';
-      replyText = `I'm not quite sure I understood that. You can ask me to search restaurants by cuisine, show a menu, check or cancel a reservation, or type "help" for a list of features!`;
+      replyText = `I'm not quite sure I understood that. You can ask me to search restaurants by cuisine or city (e.g. "Find Biryani in Hyderabad"), view a menu, check or cancel a reservation, or type "help" for assistance!`;
     }
 
     res.json({

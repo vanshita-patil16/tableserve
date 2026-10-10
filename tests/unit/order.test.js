@@ -7,17 +7,17 @@ async function runOrderUnitTests() {
   // 1. Calculate pricing for multi-item order
   const orderId = 'ord-unit-test-01';
   const items = [
-    { menu_item_id: 'menu-01-01', name: 'Burrata Pugliese', price: 18.00, quantity: 2, subtotal: 36.00 },
-    { menu_item_id: 'menu-01-02', name: 'Truffle Tagliolini', price: 28.50, quantity: 1, subtotal: 28.50 }
+    { menu_item_id: 'm-in-01-1', name: 'Dal Bukhara', price: 650.00, quantity: 2, subtotal: 1300.00 },
+    { menu_item_id: 'm-in-01-4', name: 'Naan Bukhara', price: 450.00, quantity: 1, subtotal: 450.00 }
   ];
   const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
-  assert.strictEqual(totalAmount, 64.50, 'Total should match expected calculation');
+  assert.strictEqual(totalAmount, 1750.00, 'Total should match expected calculation');
 
   // 2. Insert order
   const newOrder = {
     id: orderId,
     user_id: 'usr-cust-01',
-    restaurant_id: 'rest-01',
+    restaurant_id: 'rest-in-01',
     order_type: 'DINE_IN',
     table_number: 4,
     total_amount: totalAmount,

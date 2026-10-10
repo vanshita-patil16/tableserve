@@ -172,34 +172,34 @@ async function runApiTests() {
     await test('List Restaurants (GET /api/restaurants)', async () => {
       const res = await request('http://localhost:5000/api/restaurants');
       assert.strictEqual(res.status, 200);
-      assert.ok(res.data.data.length >= 6);
+      assert.ok(res.data.data.length >= 18);
     });
 
-    await test('Get Restaurant Details with Menu (GET /api/restaurants/rest-01)', async () => {
-      const res = await request('http://localhost:5000/api/restaurants/rest-01');
+    await test('Get Restaurant Details with Menu (GET /api/restaurants/rest-in-01)', async () => {
+      const res = await request('http://localhost:5000/api/restaurants/rest-in-01');
       assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.data.data.name, 'Bella Italia Trattoria');
+      assert.strictEqual(res.data.data.name, 'Bukhara - ITC Maurya');
       assert.ok(res.data.data.menu.length > 0);
     });
 
     // 4. Search Service
     console.log('\n--- 4. Search & Multi-Faceted Filtering ---');
-    await test('Search by Cuisine Filter (GET /api/search?cuisine=Italian)', async () => {
-      const res = await request('http://localhost:5000/api/search?cuisine=Italian');
+    await test('Search by Cuisine Filter (GET /api/search?cuisine=North Indian)', async () => {
+      const res = await request('http://localhost:5000/api/search?cuisine=North Indian');
       assert.strictEqual(res.status, 200);
-      assert.ok(res.data.data.every(r => r.cuisine === 'Italian'));
+      assert.ok(res.data.data.every(r => r.cuisine.includes('North Indian')));
     });
 
-    await test('Text Search matching Menu Item (GET /api/search?q=truffle)', async () => {
-      const res = await request('http://localhost:5000/api/search?q=truffle');
+    await test('Text Search matching Menu Item (GET /api/search?q=bukhara)', async () => {
+      const res = await request('http://localhost:5000/api/search?q=bukhara');
       assert.strictEqual(res.status, 200);
-      assert.ok(res.data.data.some(r => r.name === 'Bella Italia Trattoria'));
+      assert.ok(res.data.data.some(r => r.name.includes('Bukhara')));
     });
 
     // 5. Reservation & Double-Booking Protection
     console.log('\n--- 5. Reservation & Double-Booking Protection ---');
     await test('Check Table Availability (GET /api/reservations/availability)', async () => {
-      const res = await request('http://localhost:5000/api/reservations/availability?restaurant_id=rest-01&date=2026-11-25&guests=2');
+      const res = await request('http://localhost:5000/api/reservations/availability?restaurant_id=rest-in-01&date=2026-11-25&guests=2');
       assert.strictEqual(res.status, 200);
       assert.ok(res.data.slots.length > 0);
     });
@@ -210,11 +210,11 @@ async function runApiTests() {
         method: 'POST',
         headers: { Authorization: `Bearer ${customerToken}` },
         body: {
-          restaurant_id: 'rest-01',
+          restaurant_id: 'rest-in-01',
           reservation_date: '2026-11-25',
           time_slot: '20:00',
           guests: 2,
-          special_requests: 'Quiet romantic table'
+          special_requests: 'Quiet corner table'
         }
       });
       assert.strictEqual(res.status, 201);
@@ -271,17 +271,17 @@ async function runApiTests() {
         method: 'POST',
         headers: { Authorization: `Bearer ${customerToken}` },
         body: {
-          restaurant_id: 'rest-01',
+          restaurant_id: 'rest-in-01',
           order_type: 'DINE_IN',
           table_number: 3,
           items: [
-            { menu_item_id: 'menu-01-01', quantity: 1 },
-            { menu_item_id: 'menu-01-03', quantity: 2 }
+            { menu_item_id: 'm-in-01-1', quantity: 1 },
+            { menu_item_id: 'm-in-01-4', quantity: 2 }
           ]
         }
       });
       assert.strictEqual(res.status, 201);
-      assert.strictEqual(res.data.data.total_amount, 62.00); // 18 + 22*2 = 62
+      assert.strictEqual(res.data.data.total_amount, 1550.00); // 650 + 450*2 = 1550
       orderId = res.data.data.id;
     });
 
@@ -318,7 +318,7 @@ async function runApiTests() {
     await test('Lex Intent 3: RestaurantSearchIntent', async () => {
       const res = await request('http://localhost:5000/api/chatbot/message', {
         method: 'POST',
-        body: { message: 'Find me Italian restaurants' }
+        body: { message: 'Find me Biryani in Hyderabad' }
       });
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.data.intent, 'RestaurantSearchIntent');
@@ -327,7 +327,7 @@ async function runApiTests() {
     await test('Lex Intent 4: MenuIntent', async () => {
       const res = await request('http://localhost:5000/api/chatbot/message', {
         method: 'POST',
-        body: { message: 'Show menu for Bella Italia' }
+        body: { message: 'Show menu for Bukhara' }
       });
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.data.intent, 'MenuIntent');

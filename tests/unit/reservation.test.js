@@ -4,7 +4,7 @@ const db = require('../../services/shared/database');
 async function runReservationUnitTests() {
   console.log('🧪 [Unit Test] Running Reservation & Double-Booking Prevention tests...');
 
-  const restaurantId = 'rest-01'; // Bella Italia (has 8 tables)
+  const restaurantId = 'rest-in-01'; // Bukhara (has 12 tables)
   const testDate = '2026-11-20';
   const testSlot = '19:00';
   const guests = 2;
