@@ -1,0 +1,240 @@
+{
+  "name": "TABLESERVE_Bot",
+  "version": "1.0.0",
+  "description": "Amazon Lex v2 conversational chatbot for TABLESERVE restaurant reservations and ordering platform",
+  "dataPrivacy": {
+    "childDirected": false
+  },
+  "idleSessionTTLInSeconds": 300,
+  "botLocales": [
+    {
+      "localeId": "en_US",
+      "description": "English (US) locale for TABLESERVE bot",
+      "nluConfidenceThreshold": 0.40,
+      "intents": [
+        {
+          "name": "GreetingIntent",
+          "description": "Handles greetings from customers",
+          "sampleUtterances": [
+            { "utterance": "hi" },
+            { "utterance": "hello" },
+            { "utterance": "hey" },
+            { "utterance": "good morning" },
+            { "utterance": "good afternoon" },
+            { "utterance": "greetings" }
+          ],
+          "intentClosingSetting": {
+            "closingResponse": {
+              "messageGroups": [
+                {
+                  "message": {
+                    "plainTextMessage": {
+                      "value": "Hello! Welcome to TABLESERVE. I can help you search restaurants, view menus, book tables, and check reservation status. What can I do for you?"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "RestaurantSearchIntent",
+          "description": "Finds restaurants based on cuisine or location",
+          "sampleUtterances": [
+            { "utterance": "find restaurants" },
+            { "utterance": "search for {Cuisine} food" },
+            { "utterance": "recommend an {Cuisine} restaurant" },
+            { "utterance": "find a place to eat in {City}" },
+            { "utterance": "show {Cuisine} dining options" }
+          ],
+          "slots": [
+            {
+              "name": "Cuisine",
+              "slotTypeName": "AMAZON.Food",
+              "valueElicitationSetting": {
+                "slotConstraint": "Optional",
+                "promptSpecification": {
+                  "messageGroups": [
+                    {
+                      "message": {
+                        "plainTextMessage": { "value": "What type of cuisine are you craving (Italian, Japanese, Indian, French, Mexican, Steakhouse)?" }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "City",
+              "slotTypeName": "AMAZON.City",
+              "valueElicitationSetting": {
+                "slotConstraint": "Optional"
+              }
+            }
+          ]
+        },
+        {
+          "name": "MenuIntent",
+          "description": "Displays menu items and signature dishes for a restaurant",
+          "sampleUtterances": [
+            { "utterance": "show menu for {RestaurantName}" },
+            { "utterance": "what dishes do you have at {RestaurantName}" },
+            { "utterance": "what is on the menu" },
+            { "utterance": "show dishes" }
+          ],
+          "slots": [
+            {
+              "name": "RestaurantName",
+              "slotTypeName": "AMAZON.Organization",
+              "valueElicitationSetting": {
+                "slotConstraint": "Required",
+                "promptSpecification": {
+                  "messageGroups": [
+                    {
+                      "message": {
+                        "plainTextMessage": { "value": "Which restaurant's menu would you like to see?" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ReservationIntent",
+          "description": "Books a table reservation with date, time, and guest count",
+          "sampleUtterances": [
+            { "utterance": "book a table at {RestaurantName}" },
+            { "utterance": "reserve a table for {Guests} people" },
+            { "utterance": "make a reservation on {Date} at {Time}" },
+            { "utterance": "table for {Guests} at {RestaurantName} on {Date}" }
+          ],
+          "slots": [
+            {
+              "name": "RestaurantName",
+              "slotTypeName": "AMAZON.Organization",
+              "valueElicitationSetting": {
+                "slotConstraint": "Required",
+                "promptSpecification": {
+                  "messageGroups": [{ "message": { "plainTextMessage": { "value": "Which restaurant would you like to book at?" } } }]
+                }
+              }
+            },
+            {
+              "name": "Date",
+              "slotTypeName": "AMAZON.Date",
+              "valueElicitationSetting": {
+                "slotConstraint": "Required",
+                "promptSpecification": {
+                  "messageGroups": [{ "message": { "plainTextMessage": { "value": "What date would you like to book for?" } } }]
+                }
+              }
+            },
+            {
+              "name": "Time",
+              "slotTypeName": "AMAZON.Time",
+              "valueElicitationSetting": {
+                "slotConstraint": "Required",
+                "promptSpecification": {
+                  "messageGroups": [{ "message": { "plainTextMessage": { "value": "What time slot would you prefer (e.g. 19:00)?" } } }]
+                }
+              }
+            },
+            {
+              "name": "Guests",
+              "slotTypeName": "AMAZON.Number",
+              "valueElicitationSetting": {
+                "slotConstraint": "Required",
+                "promptSpecification": {
+                  "messageGroups": [{ "message": { "plainTextMessage": { "value": "How many guests will be dining?" } } }]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ReservationStatusIntent",
+          "description": "Checks current status of an existing reservation",
+          "sampleUtterances": [
+            { "utterance": "check status of my reservation" },
+            { "utterance": "is my table confirmed for {ReservationId}" },
+            { "utterance": "check booking status" },
+            { "utterance": "status of {ReservationId}" }
+          ],
+          "slots": [
+            {
+              "name": "ReservationId",
+              "slotTypeName": "AMAZON.AlphaNumeric",
+              "valueElicitationSetting": {
+                "slotConstraint": "Optional"
+              }
+            }
+          ]
+        },
+        {
+          "name": "CancelReservationIntent",
+          "description": "Cancels an existing reservation and releases the table slot",
+          "sampleUtterances": [
+            { "utterance": "cancel reservation {ReservationId}" },
+            { "utterance": "cancel my booking" },
+            { "utterance": "i want to cancel my table reservation" }
+          ],
+          "slots": [
+            {
+              "name": "ReservationId",
+              "slotTypeName": "AMAZON.AlphaNumeric",
+              "valueElicitationSetting": {
+                "slotConstraint": "Required",
+                "promptSpecification": {
+                  "messageGroups": [{ "message": { "plainTextMessage": { "value": "Please provide your reservation ID (e.g. res-01)." } } }]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "HelpIntent",
+          "description": "Provides help guidelines on bot capabilities",
+          "sampleUtterances": [
+            { "utterance": "help" },
+            { "utterance": "what can you do" },
+            { "utterance": "how to use this" },
+            { "utterance": "give me options" }
+          ],
+          "intentClosingSetting": {
+            "closingResponse": {
+              "messageGroups": [
+                {
+                  "message": {
+                    "plainTextMessage": {
+                      "value": "You can ask me to: 1) Find restaurants by cuisine, 2) View menus and prices, 3) Book a table with real-time double-booking prevention, 4) Check or cancel an existing reservation. What would you like to do?"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "FallbackIntent",
+          "description": "Default intent invoked when customer input does not match recognized patterns",
+          "parentIntentSignature": "AMAZON.FallbackIntent",
+          "intentClosingSetting": {
+            "closingResponse": {
+              "messageGroups": [
+                {
+                  "message": {
+                    "plainTextMessage": {
+                      "value": "I didn't quite catch that. You can ask me to search restaurants, view menus, or book a table. Say 'help' for examples."
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
