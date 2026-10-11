@@ -11,7 +11,9 @@ const PORT = process.env.PORT || 5002;
 app.use(cors());
 app.use(express.json());
 
-// AWS SNS Notification Dispatcher (Supports real AWS SNS or local mock event log)
+const { execFile } = require('child_process');
+
+// AWS SNS Notification Dispatcher (Dispatches to real AWS SNS Topic + local fallback)
 async function dispatchSnsNotification(reservation, user, restaurant) {
   const messagePayload = {
     eventType: 'RESERVATION_CONFIRMED',
@@ -25,21 +27,38 @@ async function dispatchSnsNotification(reservation, user, restaurant) {
     timestamp: new Date().toISOString()
   };
 
-  const topicArn = process.env.AWS_SNS_TOPIC_ARN;
-  if (topicArn && process.env.AWS_REGION) {
-    try {
-      // In AWS environment, use AWS SDK SNS Publish
-      console.log(`[AWS SNS] Publishing reservation event to topic ${topicArn}`);
-      // Simulated or real AWS SDK publish call
-    } catch (err) {
-      console.warn(`[AWS SNS] SNS publish failed: ${err.message}`);
+  const topicArn = process.env.AWS_SNS_TOPIC_ARN || 'arn:aws:sns:us-east-1:515794172620:tableserve-reservation-confirmations';
+  const region = process.env.AWS_REGION || 'us-east-1';
+
+  const subject = `TABLESERVE: Reservation Confirmed at ${messagePayload.restaurantName}`;
+  const messageText = `Dear ${messagePayload.customerName},\n\n` +
+    `Your table reservation has been successfully CONFIRMED at ${messagePayload.restaurantName}!\n\n` +
+    `• Reservation ID: #${messagePayload.reservationId}\n` +
+    `• Date & Time: ${messagePayload.date} at ${messagePayload.time}\n` +
+    `• Party Size: ${messagePayload.guests} Guests\n` +
+    `• Status: CONFIRMED\n\n` +
+    `Thank you for dining with TABLESERVE!\n- TABLESERVE Concierge Team`;
+
+  console.log(`[AWS SNS] Dispatching real notification to topic: ${topicArn}`);
+
+  // Call AWS CLI sns publish (pre-installed natively on Amazon Linux 2023 EC2)
+  execFile('aws', [
+    'sns', 'publish',
+    '--topic-arn', topicArn,
+    '--subject', subject,
+    '--message', messageText,
+    '--region', region
+  ], (err, stdout, stderr) => {
+    if (err) {
+      console.warn(`[AWS SNS Notice] AWS CLI SNS publish: ${err.message || stderr}`);
+    } else {
+      console.log(`🎉 [AWS SNS SUCCESS] Real Email dispatched to subscribers! Result: ${stdout.trim()}`);
     }
-  } else {
-    // Local SNS simulation
-    console.log(`🔔 [SNS Event Notification] Broadcasted to subscribers:`);
-    console.log(`   Reservation: #${reservation.id} | Restaurant: ${messagePayload.restaurantName}`);
-    console.log(`   Customer: ${messagePayload.customerName} (${messagePayload.customerEmail}) | Slot: ${reservation.reservation_date} ${reservation.time_slot}`);
-  }
+  });
+
+  console.log(`🔔 [SNS Event Notification] Broadcasted to subscribers:`);
+  console.log(`   Reservation: #${reservation.id} | Restaurant: ${messagePayload.restaurantName}`);
+  console.log(`   Customer: ${messagePayload.customerName} (${messagePayload.customerEmail}) | Slot: ${reservation.reservation_date} ${reservation.time_slot}`);
 
   return messagePayload;
 }
