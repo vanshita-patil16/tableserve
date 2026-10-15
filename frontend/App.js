@@ -1930,11 +1930,19 @@ function App() {
     className: "py-2 px-2 font-mono font-bold text-orange-600"
   }, "FallbackIntent"), /*#__PURE__*/React.createElement("td", {
     className: "py-2 px-2 text-slate-600"
-  }, "Unexpected or out-of-domain phrases"), /*#__PURE__*/React.createElement("td", {
+  }, "Unrecognized queries (e.g., random text)"), /*#__PURE__*/React.createElement("td", {
     className: "py-2 px-2 font-mono text-slate-400"
   }, "None"), /*#__PURE__*/React.createElement("td", {
     className: "py-2 px-2 text-slate-700"
-  }, "Graceful recovery with suggested prompt chips")))))), /*#__PURE__*/React.createElement("div", {
+  }, "\"I didn't understand you. Please try asking about restaurant reservations or menus!\"")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-red-600"
+  }, "OutOfDomainGuardrail"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"book a bus ticket\", \"flight booking\", \"weather\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-400"
+  }, "None"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Rejects non-dining requests; redirects user back to restaurant tables and menus")))))), /*#__PURE__*/React.createElement("div", {
     className: "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm"
   }, /*#__PURE__*/React.createElement("h4", {
     className: "font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-2"

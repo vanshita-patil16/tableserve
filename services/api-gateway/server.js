@@ -446,32 +446,50 @@ app.post('/api/chatbot/message', async (req, res) => {
     let actionData = null;
 
     // -------------------------------------------------------------
+    // GUARDRAIL: OUT-OF-DOMAIN INTENT FILTER (Reject Non-Dining Topics)
+    // -------------------------------------------------------------
+    const outOfDomainMatch = text.match(/\b(bus|train|flight|plane|ticket|tickets|movie|cinema|theater|theatre|hotel room|hotel booking|cab|taxi|uber|ola|cricket|ipl|football|weather|clothes|shopping|shoes|mobile phone|laptop|crypto|bitcoin)\b/i);
+
+    if (outOfDomainMatch) {
+      const topic = outOfDomainMatch[0];
+      responseIntent = 'OutOfDomainFallback';
+      sessionAttributes.dialogState = null;
+      replyText = `I didn't understand you. I am TABLESERVE's restaurant dining assistant and can only help with restaurant table reservations, food menus, and dining orders. I cannot help with "${topic}" or non-dining services. Please try asking about restaurant table bookings, menus, or food recommendations!`;
+    }
+    // -------------------------------------------------------------
     // MULTI-TURN DIALOGUE TRAINING STATE MACHINE (Lex Session State)
     // -------------------------------------------------------------
-    if (sessionAttributes.dialogState === 'BOOKING_ELICIT_RESTAURANT') {
+    else if (sessionAttributes.dialogState === 'BOOKING_ELICIT_RESTAURANT') {
       responseIntent = 'ReservationIntent';
       const matchedRest = restaurants.find(r => 
         text.includes(r.name.toLowerCase()) || 
         r.name.toLowerCase().includes(text) ||
         text.includes(r.city.toLowerCase()) ||
         text.includes(r.cuisine.toLowerCase())
-      ) || restaurants[0];
+      );
 
-      sessionAttributes.restaurantName = matchedRest.name;
-      sessionAttributes.restaurantId = matchedRest.id;
-      sessionAttributes.restaurantCity = matchedRest.city;
-      sessionAttributes.dialogState = 'BOOKING_ELICIT_GUESTS';
-
-      replyText = `Wonderful choice! ${matchedRest.name} in ${matchedRest.city} is selected. How many guests will be dining with you? (e.g. 2, 4, 6)`;
+      if (!matchedRest) {
+        replyText = `I didn't recognize that restaurant or cuisine. Please choose from our dining partners like **Bukhara**, **Saravanaa Bhavan**, **Paradise Biryani**, **Trishna**, or **Chokhi Dhani**, or tell me a city (e.g., Delhi, Mumbai, Hyderabad).`;
+      } else {
+        sessionAttributes.restaurantName = matchedRest.name;
+        sessionAttributes.restaurantId = matchedRest.id;
+        sessionAttributes.restaurantCity = matchedRest.city;
+        sessionAttributes.dialogState = 'BOOKING_ELICIT_GUESTS';
+        replyText = `Wonderful choice! ${matchedRest.name} in ${matchedRest.city} is selected. How many guests will be dining with you? (e.g. 2, 4, 6)`;
+      }
     }
     else if (sessionAttributes.dialogState === 'BOOKING_ELICIT_GUESTS') {
       responseIntent = 'ReservationIntent';
-      const numMatch = text.match(/\d+/) || (text.includes('one') ? [1] : text.includes('two') ? [2] : text.includes('three') ? [3] : text.includes('four') ? [4] : text.includes('five') ? [5] : text.includes('six') ? [6] : [2]);
-      const guests = parseInt(numMatch[0]) || 2;
-      sessionAttributes.guests = guests;
-      sessionAttributes.dialogState = 'BOOKING_ELICIT_TIME';
-
-      replyText = `Table for ${guests} guests at ${sessionAttributes.restaurantName || 'the restaurant'}. What date and time slot would you prefer? (For example: "Tonight at 8:00 PM" or "Tomorrow at 7:30 PM")`;
+      const numMatch = text.match(/\d+/) || (text.includes('one') ? [1] : text.includes('two') ? [2] : text.includes('three') ? [3] : text.includes('four') ? [4] : text.includes('five') ? [5] : text.includes('six') ? [6] : null);
+      
+      if (!numMatch) {
+        replyText = `I didn't understand that. Please specify the number of dining guests (for example: "2 guests" or "4 people").`;
+      } else {
+        const guests = parseInt(numMatch[0]) || 2;
+        sessionAttributes.guests = guests;
+        sessionAttributes.dialogState = 'BOOKING_ELICIT_TIME';
+        replyText = `Table for ${guests} guests at ${sessionAttributes.restaurantName || 'the restaurant'}. What date and time slot would you prefer? (For example: "Tonight at 8:00 PM" or "Tomorrow at 7:30 PM")`;
+      }
     }
     else if (sessionAttributes.dialogState === 'BOOKING_ELICIT_TIME') {
       responseIntent = 'ReservationIntent';
@@ -511,8 +529,17 @@ app.post('/api/chatbot/message', async (req, res) => {
       responseIntent = 'HelpIntent';
       replyText = `Here is what you can ask me by voice or text:\n• "Search restaurants" (e.g., "Find Biryani in Hyderabad" or "North Indian in Delhi")\n• "View menu" (e.g., "Show menu for Bukhara" or "Saravanaa Bhavan")\n• "Reserve a table" (e.g., "Book table at Bukhara for 4")\n• "Check my reservation" (e.g., "Check status of res-01")\n• "Cancel reservation" (e.g., "Cancel res-01")\n• "Order food" (e.g., browse menu and add to cart)`;
     }
-    // 7. ReservationIntent (Multi-Turn Dialogue Starter)
-    else if (text.includes('book') || text.includes('reserve') || text.includes('table')) {
+    // 7. ReservationIntent (Strict Dining Reservation Training - rejects bus/train/plane tickets)
+    else if (
+      text.includes('book a table') || text.includes('reserve a table') ||
+      text.includes('table reservation') || text.includes('table booking') ||
+      text.includes('book table') || text.includes('reserve table') ||
+      text.includes('book for') || text.includes('table for') ||
+      text.includes('dinner reservation') || text.includes('lunch reservation') ||
+      (text.includes('reserve') && (text.includes('seat') || text.includes('dining') || text.includes('restaurant'))) ||
+      ((text.includes('book') || text.includes('reserve')) && restaurants.some(r => text.includes(r.name.toLowerCase()))) ||
+      (text === 'book' || text === 'reserve' || text === 'booking' || text === 'reservation')
+    ) {
       responseIntent = 'ReservationIntent';
       const matchedRest = restaurants.find(r => text.includes(r.name.toLowerCase()));
       if (matchedRest) {
@@ -611,10 +638,11 @@ app.post('/api/chatbot/message', async (req, res) => {
         replyText = `You don't currently have any active reservations. Would you like to book a table at one of our 18 Indian restaurants?`;
       }
     }
-    // 8. FallbackIntent
+    // 8. FallbackIntent (Helpful error message for unrecognized requests)
     else {
       responseIntent = 'FallbackIntent';
-      replyText = `I'm not quite sure I understood that. You can ask me to search restaurants by cuisine or city (e.g. "Find Biryani in Hyderabad"), view a menu, check or cancel a reservation, or type "help" for assistance!`;
+      sessionAttributes.dialogState = null;
+      replyText = `I didn't understand you. Please try asking something else related to dining, such as:\n• "Book a table for 2 at Bukhara"\n• "Find Biryani in Hyderabad"\n• "Show menu for Saravanaa Bhavan"\n• "Check status of my reservation"`;
     }
 
     res.json({

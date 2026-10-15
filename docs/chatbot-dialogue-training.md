@@ -100,7 +100,8 @@ Action: Dispatches Amazon SNS notification event.
 | **`ReservationStatusIntent`** | "check status of res-01", "my booking status", "check reservation" | `{ReservationId}` | Queries live reservation lifecycle status and assigned table number. |
 | **`CancelReservationIntent`** | "cancel reservation res-01", "cancel my table" | `{ReservationId}` | Sets status to `CANCELLED` and immediately releases table slot back to pool. |
 | **`HelpIntent`** | "help", "what can you do", "how to use chatbot" | *None* | Lists guided voice and text actions. |
-| **`FallbackIntent`** | Out-of-domain or unclassified phrases | *None* | Graceful recovery providing clickable suggestion prompt chips. |
+| **`FallbackIntent`** | Unrecognized phrases (e.g. random text) | *None* | Returns: "I didn't understand you. Please try asking about restaurant reservations or menus!" |
+| **`OutOfDomainGuardrail`** | "book a bus ticket", "flight booking", "weather" | *None* | Domain restriction filter: Rejects non-dining requests and guides user back to restaurant tables. |
 
 ---
 
@@ -113,3 +114,7 @@ Action: Dispatches Amazon SNS notification event.
 ### Q2: "What dialogue training did you give to the chatbot?"
 > **Answer**:  
 > *"Ma'am, our chatbot is trained on an 8-intent conversational dataset defined in `aws/lex/tableserve-lex-bot.json` with an NLU confidence threshold of 0.40. Crucially, we implemented a **multi-turn dialogue state machine** using `sessionAttributes`. For example, in a table reservation dialogue, the bot tracks conversational state across 4 distinct turns: eliciting the restaurant name, eliciting the guest count, eliciting the time slot, and finally locking the table and dispatching an Amazon SNS email notification without asking the user to repeat information."*
+
+### Q3: "What happens if someone asks your bot for something outside restaurant dining (like a bus ticket or weather)?"
+> **Answer**:  
+> *"Ma'am, we trained an **Out-of-Domain Guardrail Filter**. If a user enters out-of-scope requests such as 'book a bus ticket', 'train tickets', or 'flight booking', the chatbot rejects the request with: 'I didn't understand you. I am TABLESERVE's restaurant dining assistant and can only help with restaurant table reservations, menus, and food queries.' It will not confuse a bus ticket with a dining reservation."*

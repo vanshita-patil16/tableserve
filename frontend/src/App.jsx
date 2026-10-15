@@ -2251,9 +2251,15 @@ function App() {
                       </tr>
                       <tr>
                         <td className="py-2 px-2 font-mono font-bold text-orange-600">FallbackIntent</td>
-                        <td className="py-2 px-2 text-slate-600">Unexpected or out-of-domain phrases</td>
+                        <td className="py-2 px-2 text-slate-600">Unrecognized queries (e.g., random text)</td>
                         <td className="py-2 px-2 font-mono text-slate-400">None</td>
-                        <td className="py-2 px-2 text-slate-700">Graceful recovery with suggested prompt chips</td>
+                        <td className="py-2 px-2 text-slate-700">"I didn't understand you. Please try asking about restaurant reservations or menus!"</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-red-600">OutOfDomainGuardrail</td>
+                        <td className="py-2 px-2 text-slate-600">"book a bus ticket", "flight booking", "weather"</td>
+                        <td className="py-2 px-2 font-mono text-slate-400">None</td>
+                        <td className="py-2 px-2 text-slate-700">Rejects non-dining requests; redirects user back to restaurant tables and menus</td>
                       </tr>
                     </tbody>
                   </table>
