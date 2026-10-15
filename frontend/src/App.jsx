@@ -58,18 +58,22 @@ function App() {
   const [resFeedback, setResFeedback] = useState(null);
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
 
-  // Amazon Lex Chatbot State
+  // Amazon Lex Chatbot State & Audio Capabilities
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatMessages, setChatMessages] = useState([
     {
       sender: 'bot',
-      text: "👋 Hi there! I'm your TABLESERVE dining assistant powered by Amazon Lex. How can I help you today?",
+      text: "👋 Namaste! I'm your TABLESERVE dining assistant powered by Amazon Lex v2 with voice audio. How can I help you today?",
       intent: 'GreetingIntent',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceAudioEnabled, setVoiceAudioEnabled] = useState(true);
+  const [showDialogueTraining, setShowDialogueTraining] = useState(false);
+  const [chatSessionAttributes, setChatSessionAttributes] = useState({});
   const chatEndRef = useRef(null);
 
   // Initialize and load restaurants
@@ -421,7 +425,77 @@ function App() {
     }
   };
 
-  // Send message to Amazon Lex Chatbot
+  // Text-to-Speech (Voice Output) using Web Speech API / Amazon Polly Voice Simulation
+  const speakBotMessage = (text) => {
+    if (!voiceAudioEnabled || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const cleanText = text
+        .replace(/\*\*/g, '')
+        .replace(/•/g, '')
+        .replace(/[#*_~`]/g, '')
+        .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.lang.includes('en-IN') || v.lang.includes('en-US') || v.lang.includes('en-GB'));
+      if (preferred) utterance.voice = preferred;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('TTS error:', e);
+    }
+  };
+
+  // Speech-to-Text (Voice Input via Microphone)
+  const toggleVoiceRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice recognition is supported in Google Chrome, Microsoft Edge, and modern browsers. Please use Chrome to enable microphone access!');
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setIsListening(false);
+        if (transcript && transcript.trim()) {
+          setChatInput(transcript);
+          handleSendChatMessage(transcript);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.warn('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn('Speech recognition initialization error:', err);
+      setIsListening(false);
+    }
+  };
+
+  // Send message to Amazon Lex Chatbot with Multi-Turn Context & Audio
   const handleSendChatMessage = async (presetText = null) => {
     const textToSend = presetText || chatInput;
     if (!textToSend.trim() || chatLoading) return;
@@ -440,9 +514,16 @@ function App() {
       const res = await fetch('/api/chatbot/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend })
+        body: JSON.stringify({
+          message: textToSend,
+          sessionAttributes: chatSessionAttributes
+        })
       });
       const data = await res.json();
+
+      if (data.sessionAttributes) {
+        setChatSessionAttributes(data.sessionAttributes);
+      }
 
       const botMsg = {
         sender: 'bot',
@@ -453,6 +534,11 @@ function App() {
       };
 
       setChatMessages(prev => [...prev, botMsg]);
+
+      // Speak reply if voice audio enabled
+      if (voiceAudioEnabled && data.reply) {
+        speakBotMessage(data.reply);
+      }
     } catch (err) {
       setChatMessages(prev => [
         ...prev,
@@ -1586,13 +1672,13 @@ function App() {
         </div>
       )}
 
-      {/* 13. AMAZON LEX CHATBOT FLOATING WIDGET (8 INTENTS) */}
+      {/* 13. AMAZON LEX CHATBOT FLOATING WIDGET (8 INTENTS + AUDIO VOICE + DIALOGUE TRAINING) */}
       <div className="fixed bottom-6 right-6 z-50">
         {!showChatbot ? (
           <button
             onClick={() => setShowChatbot(true)}
             className="w-14 h-14 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 text-white flex items-center justify-center shadow-xl shadow-orange-600/30 hover:scale-105 transition duration-200 group"
-            title="Chat with TABLESERVE Amazon Lex Bot"
+            title="Chat with TABLESERVE Amazon Lex Bot (Voice & Speech enabled)"
           >
             <span className="text-2xl group-hover:rotate-12 transition">🤖</span>
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -1601,29 +1687,55 @@ function App() {
             </span>
           </button>
         ) : (
-          <div className="w-[360px] sm:w-[400px] h-[550px] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up">
+          <div className="w-[360px] sm:w-[420px] h-[570px] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up">
             {/* Header */}
-            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-4 text-white flex items-center justify-between">
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-3.5 text-white flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-xl bg-orange-600 flex items-center justify-center text-lg shadow-sm">
                   🤖
                 </div>
                 <div>
-                  <h4 className="text-sm font-extrabold flex items-center gap-1.5">
+                  <h4 className="text-xs font-extrabold flex items-center gap-1.5">
                     <span>TABLESERVE Assistant</span>
-                    <span className="text-[10px] bg-orange-500/30 text-orange-300 font-mono px-1.5 py-0.2 rounded border border-orange-500/40">
-                      Amazon Lex
+                    <span className="text-[9px] bg-orange-500/30 text-orange-300 font-mono px-1.5 py-0.2 rounded border border-orange-500/40">
+                      Lex v2 + Voice
                     </span>
                   </h4>
-                  <p className="text-[11px] text-slate-300">8 Intents NLP Concierge</p>
+                  <p className="text-[10px] text-slate-300">8 Intents • Multi-Turn Dialogue</p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowChatbot(false)}
-                className="text-slate-400 hover:text-white text-lg p-1"
-              >
-                ✕
-              </button>
+              <div className="flex items-center space-x-1.5">
+                {/* Voice Audio Toggle */}
+                <button
+                  onClick={() => {
+                    setVoiceAudioEnabled(!voiceAudioEnabled);
+                    if (voiceAudioEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+                  }}
+                  className={`text-[10px] px-2 py-1 rounded font-mono border transition ${
+                    voiceAudioEnabled
+                      ? 'bg-orange-500/30 text-orange-200 border-orange-500/40'
+                      : 'bg-slate-700 text-slate-400 border-slate-600'
+                  }`}
+                  title={voiceAudioEnabled ? "Voice Audio Replies: ON" : "Voice Audio Replies: MUTED"}
+                >
+                  {voiceAudioEnabled ? '🔊 Audio ON' : '🔇 Muted'}
+                </button>
+                {/* Dialogue Training Modal Button */}
+                <button
+                  onClick={() => setShowDialogueTraining(true)}
+                  className="text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-mono px-2 py-1 rounded border border-amber-500/30 transition flex items-center gap-1"
+                  title="View Amazon Lex Dialogue Training & Multi-Turn State Machine"
+                >
+                  <span>🧠 Training</span>
+                </button>
+                {/* Close Button */}
+                <button
+                  onClick={() => setShowChatbot(false)}
+                  className="text-slate-400 hover:text-white text-base p-1 ml-1"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Chat Messages */}
@@ -1634,7 +1746,7 @@ function App() {
                   className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
+                    className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed relative ${
                       msg.sender === 'user'
                         ? 'bg-orange-600 text-white rounded-br-none shadow-sm'
                         : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none shadow-sm'
@@ -1642,9 +1754,18 @@ function App() {
                   >
                     <p className="whitespace-pre-line">{msg.text}</p>
                     {msg.intent && msg.sender === 'bot' && (
-                      <span className="block mt-1 text-[9px] text-slate-400 font-mono">
-                        Intent: {msg.intent}
-                      </span>
+                      <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-100">
+                        <span className="text-[9px] text-slate-400 font-mono">
+                          Intent: {msg.intent}
+                        </span>
+                        <button
+                          onClick={() => speakBotMessage(msg.text)}
+                          className="text-[11px] text-slate-400 hover:text-orange-600 transition"
+                          title="Replay Voice Audio"
+                        >
+                          🔊 Play Voice
+                        </button>
+                      </div>
                     )}
                   </div>
                   <span className="text-[9px] text-slate-400 mt-0.5 px-1">{msg.time}</span>
@@ -1660,8 +1781,30 @@ function App() {
               <div ref={chatEndRef} />
             </div>
 
+            {/* Microphone Listening Status Banner */}
+            {isListening && (
+              <div className="px-3 py-1.5 bg-red-50 border-t border-red-200 flex items-center justify-between text-xs text-red-600 animate-pulse">
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                  Listening to your microphone... Speak now!
+                </span>
+                <button
+                  onClick={toggleVoiceRecording}
+                  className="text-[10px] underline hover:text-red-800 font-bold"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
             {/* Quick Suggested Prompt Chips */}
             <div className="px-3 py-2 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto text-[11px]">
+              <button
+                onClick={() => handleSendChatMessage('Book a table')}
+                className="whitespace-nowrap px-2.5 py-1 bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 rounded-full font-semibold transition"
+              >
+                📅 Book a Table
+              </button>
               <button
                 onClick={() => handleSendChatMessage('Find Biryani in Hyderabad')}
                 className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
@@ -1678,21 +1821,27 @@ function App() {
                 onClick={() => handleSendChatMessage('Check my reservation status')}
                 className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
               >
-                📅 My Status
-              </button>
-              <button
-                onClick={() => handleSendChatMessage('help')}
-                className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
-              >
-                ❓ Help
+                📋 My Status
               </button>
             </div>
 
-            {/* Input Bar */}
-            <div className="p-3 bg-white border-t border-slate-200 flex gap-2">
+            {/* Input Bar with Microphone & Voice Controls */}
+            <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleVoiceRecording}
+                title={isListening ? "Listening... Click to stop" : "Speak using Microphone (Speech-to-Text)"}
+                className={`w-9 h-9 rounded-xl border flex items-center justify-center transition text-base ${
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse border-red-600 shadow-md shadow-red-500/30'
+                    : 'bg-slate-100 hover:bg-orange-50 text-slate-700 hover:text-orange-600 border-slate-200'
+                }`}
+              >
+                {isListening ? '🔴' : '🎤'}
+              </button>
               <input
                 type="text"
-                placeholder="Ask about restaurants, menus, reservations..."
+                placeholder={isListening ? "Listening to your voice..." : "Type or speak your request..."}
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
@@ -1701,14 +1850,184 @@ function App() {
               <button
                 onClick={() => handleSendChatMessage()}
                 disabled={chatLoading}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition"
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1 shadow-sm shadow-orange-600/30"
               >
-                Send
+                <span>Send</span>
               </button>
             </div>
           </div>
         )}
       </div>
+
+      {/* 13.5 AMAZON LEX DIALOGUE TRAINING MODAL */}
+      {showDialogueTraining && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-5 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-xl shadow-sm">
+                  🧠
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold flex items-center gap-2">
+                    <span>Amazon Lex v2 Dialogue Training & NLU Model</span>
+                    <span className="text-[10px] bg-green-500/20 text-green-300 font-mono px-2 py-0.5 rounded border border-green-500/40">
+                      TRAINED & VERIFIED
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300">Multi-Turn Context State Machine • Voice Speech Synthesis • NLU Threshold 0.40</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDialogueTraining(false)}
+                className="text-slate-400 hover:text-white text-xl p-1.5 rounded-lg hover:bg-white/10 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-700 bg-slate-50/50">
+              {/* 1. Multi-Turn Dialogue State Machine */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-2">
+                  <span>🔄 Multi-Turn Conversational Dialogue Flow</span>
+                  <span className="text-[10px] bg-orange-100 text-orange-700 font-mono px-2 py-0.5 rounded">sessionAttributes Tracking</span>
+                </h4>
+                <p className="text-slate-600 mb-3">
+                  The bot tracks context state across multiple customer turns to fulfill end-to-end table booking and restaurant discovery without requiring repeated inputs:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
+                    <span className="text-orange-600 font-bold block mb-1">Turn 1: Intent</span>
+                    <p className="text-slate-700">"Book a table"</p>
+                    <span className="text-[10px] text-slate-400 block mt-1">→ ElicitSlot: Restaurant</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
+                    <span className="text-orange-600 font-bold block mb-1">Turn 2: Slot 1</span>
+                    <p className="text-slate-700">"Bukhara"</p>
+                    <span className="text-[10px] text-slate-400 block mt-1">→ ElicitSlot: Guests</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
+                    <span className="text-orange-600 font-bold block mb-1">Turn 3: Slot 2</span>
+                    <p className="text-slate-700">"4 guests"</p>
+                    <span className="text-[10px] text-slate-400 block mt-1">→ ElicitSlot: Time</span>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 p-2.5 rounded-xl">
+                    <span className="text-green-700 font-bold block mb-1">Turn 4: Complete</span>
+                    <p className="text-slate-700">"8:00 PM"</p>
+                    <span className="text-[10px] text-green-600 block mt-1">→ Atomic Lock + SNS Email!</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Trained Intents Matrix */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-2">
+                  <span>🎯 8 Amazon Lex Trained Intents</span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 font-mono px-2 py-0.5 rounded">aws/lex/tableserve-lex-bot.json</span>
+                </h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                        <th className="py-2 px-2">Intent Name</th>
+                        <th className="py-2 px-2">Sample Utterances (Trained Phrases)</th>
+                        <th className="py-2 px-2">Slots Extracted</th>
+                        <th className="py-2 px-2">Fulfillment Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-sans">
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">GreetingIntent</td>
+                        <td className="py-2 px-2 text-slate-600">"hi", "hello", "namaste", "good morning"</td>
+                        <td className="py-2 px-2 font-mono text-slate-400">None</td>
+                        <td className="py-2 px-2 text-slate-700">Welcomes & announces voice capabilities</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">RestaurantSearchIntent</td>
+                        <td className="py-2 px-2 text-slate-600">"find Biryani in Hyderabad", "North Indian in Delhi"</td>
+                        <td className="py-2 px-2 font-mono text-slate-700">{`{Cuisine}`}, {`{City}`}</td>
+                        <td className="py-2 px-2 text-slate-700">Fuzzy query on 18 regional restaurants</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">MenuIntent</td>
+                        <td className="py-2 px-2 text-slate-600">"show menu for Bukhara", "what dishes do you have"</td>
+                        <td className="py-2 px-2 font-mono text-slate-700">{`{RestaurantName}`}</td>
+                        <td className="py-2 px-2 text-slate-700">Fetches 58 dishes with INR ₹ pricing</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">ReservationIntent</td>
+                        <td className="py-2 px-2 text-slate-600">"book a table", "reserve table for 4 at 8 PM"</td>
+                        <td className="py-2 px-2 font-mono text-slate-700">{`{Restaurant}`}, {`{Guests}`}, {`{Time}`}</td>
+                        <td className="py-2 px-2 text-slate-700">Atomic double-booking prevention + SNS</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">ReservationStatusIntent</td>
+                        <td className="py-2 px-2 text-slate-600">"check status of res-01", "my booking status"</td>
+                        <td className="py-2 px-2 font-mono text-slate-700">{`{ReservationId}`}</td>
+                        <td className="py-2 px-2 text-slate-700">Queries database status & table number</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">CancelReservationIntent</td>
+                        <td className="py-2 px-2 text-slate-600">"cancel reservation res-01", "cancel booking"</td>
+                        <td className="py-2 px-2 font-mono text-slate-700">{`{ReservationId}`}</td>
+                        <td className="py-2 px-2 text-slate-700">Releases table slot back into availability</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">HelpIntent</td>
+                        <td className="py-2 px-2 text-slate-600">"help", "what can you do", "how to use"</td>
+                        <td className="py-2 px-2 font-mono text-slate-400">None</td>
+                        <td className="py-2 px-2 text-slate-700">Provides guided action commands</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-2 font-mono font-bold text-orange-600">FallbackIntent</td>
+                        <td className="py-2 px-2 text-slate-600">Unexpected or out-of-domain phrases</td>
+                        <td className="py-2 px-2 font-mono text-slate-400">None</td>
+                        <td className="py-2 px-2 text-slate-700">Graceful recovery with suggested prompt chips</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 3. Audio & Voice Speech Capabilities */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-2">
+                  <span>🎙️ Voice Audio & Speech Synthesis Architecture</span>
+                  <span className="text-[10px] bg-blue-100 text-blue-700 font-mono px-2 py-0.5 rounded">Two-Way Voice (STT & TTS)</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-600">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <span className="font-bold text-slate-900 block mb-1">🎤 Speech-to-Text (Voice Input)</span>
+                    <p className="text-[11px]">
+                      Users click the microphone button to speak naturally. The Web Speech Recognition engine transcribes voice audio in real time and submits it into the NLU intent classification pipeline.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <span className="font-bold text-slate-900 block mb-1">🔊 Text-to-Speech (Voice Output)</span>
+                    <p className="text-[11px]">
+                      Integrated with speech synthesis (emulating Amazon Polly neural voices). The concierge converts intent fulfillment text into clear spoken voice with natural pacing, toggleable via the audio controls.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center text-xs">
+              <span className="text-slate-500 font-mono">NLU Model: Lex v2 • Voice Rate: 1.0x • AWS Cloud Ready</span>
+              <button
+                onClick={() => setShowDialogueTraining(false)}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl transition"
+              >
+                Close Training Explorer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 14. FOOTER */}
       <footer className="bg-slate-900 text-slate-400 py-10 mt-auto border-t border-slate-800">

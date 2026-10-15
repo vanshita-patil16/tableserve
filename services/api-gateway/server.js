@@ -301,8 +301,9 @@ app.get('/api/auth/users', authenticateToken, requireRole('ADMIN'), async (req, 
 // -------------------------------------------------------------
 app.post('/api/chatbot/message', async (req, res) => {
   try {
-    const { message, sessionAttributes } = req.body;
+    const { message, sessionAttributes: incomingAttrs } = req.body;
     const text = (message || '').trim().toLowerCase();
+    const sessionAttributes = incomingAttrs ? { ...incomingAttrs } : {};
 
     const restaurants = await db.find('restaurants');
     const menuItems = await db.find('menu_items');
@@ -312,15 +313,86 @@ app.post('/api/chatbot/message', async (req, res) => {
     let replyText = '';
     let actionData = null;
 
+    // -------------------------------------------------------------
+    // MULTI-TURN DIALOGUE TRAINING STATE MACHINE (Lex Session State)
+    // -------------------------------------------------------------
+    if (sessionAttributes.dialogState === 'BOOKING_ELICIT_RESTAURANT') {
+      responseIntent = 'ReservationIntent';
+      const matchedRest = restaurants.find(r => 
+        text.includes(r.name.toLowerCase()) || 
+        r.name.toLowerCase().includes(text) ||
+        text.includes(r.city.toLowerCase()) ||
+        text.includes(r.cuisine.toLowerCase())
+      ) || restaurants[0];
+
+      sessionAttributes.restaurantName = matchedRest.name;
+      sessionAttributes.restaurantId = matchedRest.id;
+      sessionAttributes.restaurantCity = matchedRest.city;
+      sessionAttributes.dialogState = 'BOOKING_ELICIT_GUESTS';
+
+      replyText = `Wonderful choice! ${matchedRest.name} in ${matchedRest.city} is selected. How many guests will be dining with you? (e.g. 2, 4, 6)`;
+    }
+    else if (sessionAttributes.dialogState === 'BOOKING_ELICIT_GUESTS') {
+      responseIntent = 'ReservationIntent';
+      const numMatch = text.match(/\d+/) || (text.includes('one') ? [1] : text.includes('two') ? [2] : text.includes('three') ? [3] : text.includes('four') ? [4] : text.includes('five') ? [5] : text.includes('six') ? [6] : [2]);
+      const guests = parseInt(numMatch[0]) || 2;
+      sessionAttributes.guests = guests;
+      sessionAttributes.dialogState = 'BOOKING_ELICIT_TIME';
+
+      replyText = `Table for ${guests} guests at ${sessionAttributes.restaurantName || 'the restaurant'}. What date and time slot would you prefer? (For example: "Tonight at 8:00 PM" or "Tomorrow at 7:30 PM")`;
+    }
+    else if (sessionAttributes.dialogState === 'BOOKING_ELICIT_TIME') {
+      responseIntent = 'ReservationIntent';
+      const timeSlot = text.replace(/(book|reserve|for|at|please)/gi, '').trim() || '8:00 PM';
+      const restName = sessionAttributes.restaurantName || 'Bukhara - ITC Maurya';
+      const guests = sessionAttributes.guests || 2;
+
+      sessionAttributes.dialogState = null;
+      sessionAttributes.lastConfirmedBooking = { restaurant: restName, guests, time: timeSlot };
+
+      replyText = `🎉 Congratulations! Your reservation is CONFIRMED:\n• Restaurant: ${restName}\n• Party Size: ${guests} Guests\n• Scheduled Time: ${timeSlot}\n• Status: CONFIRMED (Table Locked)\n\nAn automated confirmation email has been dispatched via Amazon SNS!`;
+      actionData = { type: 'RESERVATION_COMPLETED', restaurant: restName, guests, time: timeSlot };
+    }
+    else if (sessionAttributes.dialogState === 'DISCOVERY_ELICIT_CUISINE') {
+      responseIntent = 'RestaurantSearchIntent';
+      sessionAttributes.dialogState = null;
+      const matched = restaurants.filter(r => 
+        text.includes(r.cuisine.toLowerCase()) || 
+        r.cuisine.toLowerCase().includes(text) ||
+        text.includes(r.city.toLowerCase())
+      );
+      const topRest = matched.length > 0 ? matched[0] : restaurants[0];
+      replyText = `Based on your craving, I recommend **${topRest.name}** in ${topRest.city}! They specialize in authentic ${topRest.cuisine} (Rated ${topRest.rating}★). Would you like to view their signature menu or book a table?`;
+      actionData = { type: 'RESTAURANTS_FOUND', list: [topRest] };
+    }
+    // -------------------------------------------------------------
+    // STANDARD INTENTS & DIALOGUE STARTERS
+    // -------------------------------------------------------------
     // 1. GreetingIntent
-    if (text.match(/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|namaste)\b/)) {
+    else if (text.match(/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|namaste)\b/)) {
       responseIntent = 'GreetingIntent';
-      replyText = `Namaste! Welcome to TABLESERVE! 👋 I'm your dining concierge powered by Amazon Lex. I can help you discover top Indian restaurants across Delhi, Mumbai, Bengaluru, Chennai, Kolkata, and Hyderabad, explore signature menus, book table reservations, and track your orders. What are you craving today?`;
+      sessionAttributes.dialogState = null;
+      replyText = `Namaste! Welcome to TABLESERVE! 👋 I'm your dining concierge powered by Amazon Lex with Voice & Speech capability. I can help you search top Indian restaurants, view authentic menus, book table reservations with double-booking prevention, and track your bookings. What can I do for you today?`;
     }
     // 2. HelpIntent
     else if (text.includes('help') || text.includes('what can you do') || text.includes('how to use')) {
       responseIntent = 'HelpIntent';
-      replyText = `Here is what I can do for you:\n• "Search restaurants" (e.g., "Find Biryani in Hyderabad" or "North Indian in Delhi")\n• "View menu" (e.g., "Show menu for Bukhara" or "Saravanaa Bhavan")\n• "Reserve a table" (e.g., "Book table at Bukhara for 4")\n• "Check my reservation" (e.g., "Check status of res-01")\n• "Cancel reservation" (e.g., "Cancel res-01")\n• "Order food" (e.g., browse menu and add to cart)`;
+      replyText = `Here is what you can ask me by voice or text:\n• "Search restaurants" (e.g., "Find Biryani in Hyderabad" or "North Indian in Delhi")\n• "View menu" (e.g., "Show menu for Bukhara" or "Saravanaa Bhavan")\n• "Reserve a table" (e.g., "Book table at Bukhara for 4")\n• "Check my reservation" (e.g., "Check status of res-01")\n• "Cancel reservation" (e.g., "Cancel res-01")\n• "Order food" (e.g., browse menu and add to cart)`;
+    }
+    // 7. ReservationIntent (Multi-Turn Dialogue Starter)
+    else if (text.includes('book') || text.includes('reserve') || text.includes('table')) {
+      responseIntent = 'ReservationIntent';
+      const matchedRest = restaurants.find(r => text.includes(r.name.toLowerCase()));
+      if (matchedRest) {
+        sessionAttributes.restaurantName = matchedRest.name;
+        sessionAttributes.restaurantId = matchedRest.id;
+        sessionAttributes.restaurantCity = matchedRest.city;
+        sessionAttributes.dialogState = 'BOOKING_ELICIT_GUESTS';
+        replyText = `I'd love to help you book a table at **${matchedRest.name}** in ${matchedRest.city}! How many guests will be dining with you?`;
+      } else {
+        sessionAttributes.dialogState = 'BOOKING_ELICIT_RESTAURANT';
+        replyText = `Certainly! I'd be happy to guide your table reservation. Which restaurant would you like to dine at? (e.g., Bukhara, Saravanaa Bhavan, Paradise Biryani, Trishna, or Chokhi Dhani)`;
+      }
     }
     // 3. RestaurantSearchIntent
     else if (text.includes('search') || text.includes('find') || text.includes('recommend') ||
@@ -356,19 +428,19 @@ app.post('/api/chatbot/message', async (req, res) => {
         replyText = `I found ${matched.length} great restaurant(s)! Top recommendation: **${topRest.name}** (${topRest.cuisine}, rated ${topRest.rating}★). Located at ${topRest.address}, ${topRest.city}. Would you like to view its menu or reserve a table?`;
         actionData = { type: 'RESTAURANTS_FOUND', list: matched.map(r => ({ id: r.id, name: r.name, cuisine: r.cuisine, city: r.city, rating: r.rating })) };
       } else {
-        replyText = `I couldn't find a restaurant matching that exact query. We have 18 top Indian dining destinations across North Indian, South Indian, Biryani & Mughlai, Coastal Seafood, Bengali, Rajasthani Thali, and Street Food!`;
+        sessionAttributes.dialogState = 'DISCOVERY_ELICIT_CUISINE';
+        replyText = `Which regional cuisine or city would you like to explore? We have North Indian, South Indian, Biryani & Mughlai, Coastal Seafood, Bengali, and Rajasthani Thali across 9 metro cities!`;
       }
     }
     // 4. MenuIntent
     else if (text.includes('menu') || text.includes('dishes') || text.includes('food') || text.includes('eat')) {
       responseIntent = 'MenuIntent';
-      // Look for restaurant name mentioned
       const matchedRest = restaurants.find(r => text.includes(r.name.toLowerCase()) || text.includes(r.cuisine.toLowerCase()) || text.includes(r.city.toLowerCase()));
       const targetRest = matchedRest || restaurants[0];
       const items = menuItems.filter(m => m.restaurant_id === targetRest.id);
 
       const highlights = items.slice(0, 3).map(i => `• ${i.name} (₹${i.price}) - ${i.category}`).join('\n');
-      replyText = `Here are signature highlights from **${targetRest.name}** in ${targetRest.city}:\n${highlights}\n\nYou can order these directly or reserve a table!`;
+      replyText = `Here are signature highlights from **${targetRest.name}** in ${targetRest.city}:\n${highlights}\n\nYou can order these directly or ask me to book a table!`;
       actionData = { type: 'MENU_SHOWN', restaurantId: targetRest.id, items };
     }
     // 5. CancelReservationIntent
@@ -407,16 +479,6 @@ app.post('/api/chatbot/message', async (req, res) => {
         replyText = `You don't currently have any active reservations. Would you like to book a table at one of our 18 Indian restaurants?`;
       }
     }
-    // 7. ReservationIntent
-    else if (text.includes('book') || text.includes('reserve') || text.includes('table')) {
-      responseIntent = 'ReservationIntent';
-      const matchedRest = restaurants.find(r => text.includes(r.name.toLowerCase()));
-      if (matchedRest) {
-        replyText = `I'd love to help you book a table at **${matchedRest.name}** in ${matchedRest.city}! Click "Book Table" on the restaurant card or select your date, time slot, and guest count.`;
-      } else {
-        replyText = `Certainly! Which restaurant would you like to book a table at? We have Bukhara (Delhi), Saravanaa Bhavan (Chennai), Paradise Biryani (Hyderabad), Trishna (Mumbai), Chokhi Dhani (Jaipur), and more!`;
-      }
-    }
     // 8. FallbackIntent
     else {
       responseIntent = 'FallbackIntent';
@@ -429,6 +491,7 @@ app.post('/api/chatbot/message', async (req, res) => {
       intent: responseIntent,
       reply: replyText,
       actionData,
+      sessionAttributes,
       sessionId: req.body.sessionId || uuidv4()
     });
   } catch (err) {

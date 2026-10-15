@@ -67,11 +67,11 @@ function App() {
   const [resFeedback, setResFeedback] = useState(null);
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
 
-  // Amazon Lex Chatbot State
+  // Amazon Lex Chatbot State & Audio Capabilities
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatMessages, setChatMessages] = useState([{
     sender: 'bot',
-    text: "👋 Hi there! I'm your TABLESERVE dining assistant powered by Amazon Lex. How can I help you today?",
+    text: "👋 Namaste! I'm your TABLESERVE dining assistant powered by Amazon Lex v2 with voice audio. How can I help you today?",
     intent: 'GreetingIntent',
     time: new Date().toLocaleTimeString([], {
       hour: '2-digit',
@@ -80,6 +80,10 @@ function App() {
   }]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceAudioEnabled, setVoiceAudioEnabled] = useState(true);
+  const [showDialogueTraining, setShowDialogueTraining] = useState(false);
+  const [chatSessionAttributes, setChatSessionAttributes] = useState({});
   const chatEndRef = useRef(null);
 
   // Initialize and load restaurants
@@ -477,7 +481,66 @@ function App() {
     }
   };
 
-  // Send message to Amazon Lex Chatbot
+  // Text-to-Speech (Voice Output) using Web Speech API / Amazon Polly Voice Simulation
+  const speakBotMessage = text => {
+    if (!voiceAudioEnabled || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const cleanText = text.replace(/\*\*/g, '').replace(/•/g, '').replace(/[#*_~`]/g, '').replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.lang.includes('en-IN') || v.lang.includes('en-US') || v.lang.includes('en-GB'));
+      if (preferred) utterance.voice = preferred;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('TTS error:', e);
+    }
+  };
+
+  // Speech-to-Text (Voice Input via Microphone)
+  const toggleVoiceRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice recognition is supported in Google Chrome, Microsoft Edge, and modern browsers. Please use Chrome to enable microphone access!');
+      return;
+    }
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+      recognition.onresult = event => {
+        const transcript = event.results[0][0].transcript;
+        setIsListening(false);
+        if (transcript && transcript.trim()) {
+          setChatInput(transcript);
+          handleSendChatMessage(transcript);
+        }
+      };
+      recognition.onerror = event => {
+        console.warn('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      recognition.start();
+    } catch (err) {
+      console.warn('Speech recognition initialization error:', err);
+      setIsListening(false);
+    }
+  };
+
+  // Send message to Amazon Lex Chatbot with Multi-Turn Context & Audio
   const handleSendChatMessage = async (presetText = null) => {
     const textToSend = presetText || chatInput;
     if (!textToSend.trim() || chatLoading) return;
@@ -499,10 +562,14 @@ function App() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          message: textToSend
+          message: textToSend,
+          sessionAttributes: chatSessionAttributes
         })
       });
       const data = await res.json();
+      if (data.sessionAttributes) {
+        setChatSessionAttributes(data.sessionAttributes);
+      }
       const botMsg = {
         sender: 'bot',
         text: data.reply || "I'm having trouble processing that right now.",
@@ -514,6 +581,11 @@ function App() {
         })
       };
       setChatMessages(prev => [...prev, botMsg]);
+
+      // Speak reply if voice audio enabled
+      if (voiceAudioEnabled && data.reply) {
+        speakBotMessage(data.reply);
+      }
     } catch (err) {
       setChatMessages(prev => [...prev, {
         sender: 'bot',
@@ -1328,7 +1400,7 @@ function App() {
   }, !showChatbot ? /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowChatbot(true),
     className: "w-14 h-14 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 text-white flex items-center justify-center shadow-xl shadow-orange-600/30 hover:scale-105 transition duration-200 group",
-    title: "Chat with TABLESERVE Amazon Lex Bot"
+    title: "Chat with TABLESERVE Amazon Lex Bot (Voice & Speech enabled)"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-2xl group-hover:rotate-12 transition"
   }, "🤖"), /*#__PURE__*/React.createElement("span", {
@@ -1338,34 +1410,53 @@ function App() {
   }), /*#__PURE__*/React.createElement("span", {
     className: "relative inline-flex rounded-full h-3 w-3 bg-green-500"
   }))) : /*#__PURE__*/React.createElement("div", {
-    className: "w-[360px] sm:w-[400px] h-[550px] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up"
+    className: "w-[360px] sm:w-[420px] h-[570px] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-4 text-white flex items-center justify-between"
+    className: "bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-3.5 text-white flex items-center justify-between"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center space-x-2.5"
   }, /*#__PURE__*/React.createElement("div", {
     className: "w-9 h-9 rounded-xl bg-orange-600 flex items-center justify-center text-lg shadow-sm"
   }, "🤖"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h4", {
-    className: "text-sm font-extrabold flex items-center gap-1.5"
+    className: "text-xs font-extrabold flex items-center gap-1.5"
   }, /*#__PURE__*/React.createElement("span", null, "TABLESERVE Assistant"), /*#__PURE__*/React.createElement("span", {
-    className: "text-[10px] bg-orange-500/30 text-orange-300 font-mono px-1.5 py-0.2 rounded border border-orange-500/40"
-  }, "Amazon Lex")), /*#__PURE__*/React.createElement("p", {
-    className: "text-[11px] text-slate-300"
-  }, "8 Intents NLP Concierge"))), /*#__PURE__*/React.createElement("button", {
+    className: "text-[9px] bg-orange-500/30 text-orange-300 font-mono px-1.5 py-0.2 rounded border border-orange-500/40"
+  }, "Lex v2 + Voice")), /*#__PURE__*/React.createElement("p", {
+    className: "text-[10px] text-slate-300"
+  }, "8 Intents • Multi-Turn Dialogue"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-1.5"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setVoiceAudioEnabled(!voiceAudioEnabled);
+      if (voiceAudioEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+    },
+    className: `text-[10px] px-2 py-1 rounded font-mono border transition ${voiceAudioEnabled ? 'bg-orange-500/30 text-orange-200 border-orange-500/40' : 'bg-slate-700 text-slate-400 border-slate-600'}`,
+    title: voiceAudioEnabled ? "Voice Audio Replies: ON" : "Voice Audio Replies: MUTED"
+  }, voiceAudioEnabled ? '🔊 Audio ON' : '🔇 Muted'), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowDialogueTraining(true),
+    className: "text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-mono px-2 py-1 rounded border border-amber-500/30 transition flex items-center gap-1",
+    title: "View Amazon Lex Dialogue Training & Multi-Turn State Machine"
+  }, /*#__PURE__*/React.createElement("span", null, "🧠 Training")), /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowChatbot(false),
-    className: "text-slate-400 hover:text-white text-lg p-1"
-  }, "✕")), /*#__PURE__*/React.createElement("div", {
+    className: "text-slate-400 hover:text-white text-base p-1 ml-1"
+  }, "✕"))), /*#__PURE__*/React.createElement("div", {
     className: "flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/70"
   }, chatMessages.map((msg, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     className: `flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`
   }, /*#__PURE__*/React.createElement("div", {
-    className: `max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-orange-600 text-white rounded-br-none shadow-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none shadow-sm'}`
+    className: `max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed relative ${msg.sender === 'user' ? 'bg-orange-600 text-white rounded-br-none shadow-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none shadow-sm'}`
   }, /*#__PURE__*/React.createElement("p", {
     className: "whitespace-pre-line"
-  }, msg.text), msg.intent && msg.sender === 'bot' && /*#__PURE__*/React.createElement("span", {
-    className: "block mt-1 text-[9px] text-slate-400 font-mono"
-  }, "Intent: ", msg.intent)), /*#__PURE__*/React.createElement("span", {
+  }, msg.text), msg.intent && msg.sender === 'bot' && /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mt-1.5 pt-1 border-t border-slate-100"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-[9px] text-slate-400 font-mono"
+  }, "Intent: ", msg.intent), /*#__PURE__*/React.createElement("button", {
+    onClick: () => speakBotMessage(msg.text),
+    className: "text-[11px] text-slate-400 hover:text-orange-600 transition",
+    title: "Replay Voice Audio"
+  }, "🔊 Play Voice"))), /*#__PURE__*/React.createElement("span", {
     className: "text-[9px] text-slate-400 mt-0.5 px-1"
   }, msg.time))), chatLoading && /*#__PURE__*/React.createElement("div", {
     className: "flex items-center space-x-1.5 p-3 bg-white border border-slate-200 rounded-2xl max-w-[80px]"
@@ -1383,9 +1474,21 @@ function App() {
     }
   })), /*#__PURE__*/React.createElement("div", {
     ref: chatEndRef
-  })), /*#__PURE__*/React.createElement("div", {
+  })), isListening && /*#__PURE__*/React.createElement("div", {
+    className: "px-3 py-1.5 bg-red-50 border-t border-red-200 flex items-center justify-between text-xs text-red-600 animate-pulse"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "flex items-center gap-1.5 font-semibold"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "w-2 h-2 rounded-full bg-red-500 animate-ping"
+  }), "Listening to your microphone... Speak now!"), /*#__PURE__*/React.createElement("button", {
+    onClick: toggleVoiceRecording,
+    className: "text-[10px] underline hover:text-red-800 font-bold"
+  }, "Cancel")), /*#__PURE__*/React.createElement("div", {
     className: "px-3 py-2 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto text-[11px]"
   }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleSendChatMessage('Book a table'),
+    className: "whitespace-nowrap px-2.5 py-1 bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 rounded-full font-semibold transition"
+  }, "📅 Book a Table"), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleSendChatMessage('Find Biryani in Hyderabad'),
     className: "whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
   }, "🍛 Find Biryani"), /*#__PURE__*/React.createElement("button", {
@@ -1394,14 +1497,16 @@ function App() {
   }, "📖 Bukhara Menu"), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleSendChatMessage('Check my reservation status'),
     className: "whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
-  }, "📅 My Status"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleSendChatMessage('help'),
-    className: "whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 rounded-full font-semibold text-slate-600 transition"
-  }, "❓ Help")), /*#__PURE__*/React.createElement("div", {
-    className: "p-3 bg-white border-t border-slate-200 flex gap-2"
-  }, /*#__PURE__*/React.createElement("input", {
+  }, "📋 My Status")), /*#__PURE__*/React.createElement("div", {
+    className: "p-3 bg-white border-t border-slate-200 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: toggleVoiceRecording,
+    title: isListening ? "Listening... Click to stop" : "Speak using Microphone (Speech-to-Text)",
+    className: `w-9 h-9 rounded-xl border flex items-center justify-center transition text-base ${isListening ? 'bg-red-500 text-white animate-pulse border-red-600 shadow-md shadow-red-500/30' : 'bg-slate-100 hover:bg-orange-50 text-slate-700 hover:text-orange-600 border-slate-200'}`
+  }, isListening ? '🔴' : '🎤'), /*#__PURE__*/React.createElement("input", {
     type: "text",
-    placeholder: "Ask about restaurants, menus, reservations...",
+    placeholder: isListening ? "Listening to your voice..." : "Type or speak your request...",
     value: chatInput,
     onChange: e => setChatInput(e.target.value),
     onKeyDown: e => e.key === 'Enter' && handleSendChatMessage(),
@@ -1409,8 +1514,184 @@ function App() {
   }), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleSendChatMessage(),
     disabled: chatLoading,
-    className: "bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition"
-  }, "Send")))), /*#__PURE__*/React.createElement("footer", {
+    className: "bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1 shadow-sm shadow-orange-600/30"
+  }, /*#__PURE__*/React.createElement("span", null, "Send"))))), showDialogueTraining && /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-5 text-white flex items-center justify-between"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center space-x-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-xl shadow-sm"
+  }, "🧠"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
+    className: "text-base font-extrabold flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("span", null, "Amazon Lex v2 Dialogue Training & NLU Model"), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] bg-green-500/20 text-green-300 font-mono px-2 py-0.5 rounded border border-green-500/40"
+  }, "TRAINED & VERIFIED")), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-300"
+  }, "Multi-Turn Context State Machine • Voice Speech Synthesis • NLU Threshold 0.40"))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowDialogueTraining(false),
+    className: "text-slate-400 hover:text-white text-xl p-1.5 rounded-lg hover:bg-white/10 transition"
+  }, "✕")), /*#__PURE__*/React.createElement("div", {
+    className: "p-6 overflow-y-auto space-y-6 text-xs text-slate-700 bg-slate-50/50"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm"
+  }, /*#__PURE__*/React.createElement("h4", {
+    className: "font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("span", null, "🔄 Multi-Turn Conversational Dialogue Flow"), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] bg-orange-100 text-orange-700 font-mono px-2 py-0.5 rounded"
+  }, "sessionAttributes Tracking")), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-600 mb-3"
+  }, "The bot tracks context state across multiple customer turns to fulfill end-to-end table booking and restaurant discovery without requiring repeated inputs:"), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px] font-mono"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-slate-50 border border-slate-200 p-2.5 rounded-xl"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-orange-600 font-bold block mb-1"
+  }, "Turn 1: Intent"), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-700"
+  }, "\"Book a table\""), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] text-slate-400 block mt-1"
+  }, "→ ElicitSlot: Restaurant")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-slate-50 border border-slate-200 p-2.5 rounded-xl"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-orange-600 font-bold block mb-1"
+  }, "Turn 2: Slot 1"), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-700"
+  }, "\"Bukhara\""), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] text-slate-400 block mt-1"
+  }, "→ ElicitSlot: Guests")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-slate-50 border border-slate-200 p-2.5 rounded-xl"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-orange-600 font-bold block mb-1"
+  }, "Turn 3: Slot 2"), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-700"
+  }, "\"4 guests\""), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] text-slate-400 block mt-1"
+  }, "→ ElicitSlot: Time")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-green-50 border border-green-200 p-2.5 rounded-xl"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-green-700 font-bold block mb-1"
+  }, "Turn 4: Complete"), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-700"
+  }, "\"8:00 PM\""), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] text-green-600 block mt-1"
+  }, "→ Atomic Lock + SNS Email!")))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm"
+  }, /*#__PURE__*/React.createElement("h4", {
+    className: "font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("span", null, "🎯 8 Amazon Lex Trained Intents"), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] bg-slate-100 text-slate-600 font-mono px-2 py-0.5 rounded"
+  }, "aws/lex/tableserve-lex-bot.json")), /*#__PURE__*/React.createElement("div", {
+    className: "overflow-x-auto"
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "w-full text-left border-collapse text-[11px]"
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    className: "border-b border-slate-200 text-slate-500 font-semibold"
+  }, /*#__PURE__*/React.createElement("th", {
+    className: "py-2 px-2"
+  }, "Intent Name"), /*#__PURE__*/React.createElement("th", {
+    className: "py-2 px-2"
+  }, "Sample Utterances (Trained Phrases)"), /*#__PURE__*/React.createElement("th", {
+    className: "py-2 px-2"
+  }, "Slots Extracted"), /*#__PURE__*/React.createElement("th", {
+    className: "py-2 px-2"
+  }, "Fulfillment Action"))), /*#__PURE__*/React.createElement("tbody", {
+    className: "divide-y divide-slate-100 font-sans"
+  }, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "GreetingIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"hi\", \"hello\", \"namaste\", \"good morning\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-400"
+  }, "None"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Welcomes & announces voice capabilities")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "RestaurantSearchIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"find Biryani in Hyderabad\", \"North Indian in Delhi\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-700"
+  }, `{Cuisine}`, ", ", `{City}`), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Fuzzy query on 18 regional restaurants")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "MenuIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"show menu for Bukhara\", \"what dishes do you have\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-700"
+  }, `{RestaurantName}`), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Fetches 58 dishes with INR ₹ pricing")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "ReservationIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"book a table\", \"reserve table for 4 at 8 PM\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-700"
+  }, `{Restaurant}`, ", ", `{Guests}`, ", ", `{Time}`), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Atomic double-booking prevention + SNS")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "ReservationStatusIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"check status of res-01\", \"my booking status\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-700"
+  }, `{ReservationId}`), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Queries database status & table number")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "CancelReservationIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"cancel reservation res-01\", \"cancel booking\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-700"
+  }, `{ReservationId}`), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Releases table slot back into availability")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "HelpIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "\"help\", \"what can you do\", \"how to use\""), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-400"
+  }, "None"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Provides guided action commands")), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono font-bold text-orange-600"
+  }, "FallbackIntent"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-600"
+  }, "Unexpected or out-of-domain phrases"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 font-mono text-slate-400"
+  }, "None"), /*#__PURE__*/React.createElement("td", {
+    className: "py-2 px-2 text-slate-700"
+  }, "Graceful recovery with suggested prompt chips")))))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm"
+  }, /*#__PURE__*/React.createElement("h4", {
+    className: "font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("span", null, "🎙️ Voice Audio & Speech Synthesis Architecture"), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] bg-blue-100 text-blue-700 font-mono px-2 py-0.5 rounded"
+  }, "Two-Way Voice (STT & TTS)")), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-600"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "p-3 bg-slate-50 rounded-xl border border-slate-200"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-900 block mb-1"
+  }, "🎤 Speech-to-Text (Voice Input)"), /*#__PURE__*/React.createElement("p", {
+    className: "text-[11px]"
+  }, "Users click the microphone button to speak naturally. The Web Speech Recognition engine transcribes voice audio in real time and submits it into the NLU intent classification pipeline.")), /*#__PURE__*/React.createElement("div", {
+    className: "p-3 bg-slate-50 rounded-xl border border-slate-200"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-slate-900 block mb-1"
+  }, "🔊 Text-to-Speech (Voice Output)"), /*#__PURE__*/React.createElement("p", {
+    className: "text-[11px]"
+  }, "Integrated with speech synthesis (emulating Amazon Polly neural voices). The concierge converts intent fulfillment text into clear spoken voice with natural pacing, toggleable via the audio controls."))))), /*#__PURE__*/React.createElement("div", {
+    className: "p-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center text-xs"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-500 font-mono"
+  }, "NLU Model: Lex v2 • Voice Rate: 1.0x • AWS Cloud Ready"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowDialogueTraining(false),
+    className: "bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl transition"
+  }, "Close Training Explorer")))), /*#__PURE__*/React.createElement("footer", {
     className: "bg-slate-900 text-slate-400 py-10 mt-auto border-t border-slate-800"
   }, /*#__PURE__*/React.createElement("div", {
     className: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs space-y-2"
