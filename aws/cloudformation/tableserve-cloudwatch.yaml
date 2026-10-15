@@ -1,0 +1,267 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TABLESERVE CloudWatch Observability, Metrics, Alarms, and Dashboard Stack.
+  Provisions comprehensive monitoring for the microservices platform:
+  Custom CloudWatch Dashboard, Log Groups, Metric Filters, and Metric Alarms.
+  100% Free Tier Eligible.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: tableserve-prod
+    Description: Environment prefix tag for all deployed resources
+
+  NotificationEmail:
+    Type: String
+    Default: admin@tableserve.com
+    Description: Email address for CloudWatch Alarm notifications
+
+Resources:
+  # =========================================================================
+  # 1. CLOUDWATCH LOG GROUPS
+  # =========================================================================
+  GatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/tableserve/${EnvironmentName}/api-gateway"
+      RetentionInDays: 7
+
+  MicroservicesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/tableserve/${EnvironmentName}/microservices"
+      RetentionInDays: 7
+
+  # =========================================================================
+  # 2. METRIC FILTERS (Extracting Metrics from EMF Application Logs)
+  # =========================================================================
+  RequestCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref GatewayLogGroup
+      FilterPattern: '[prefix, method, path, arrow, status, duration]'
+      MetricTransformations:
+        - MetricNamespace: TABLESERVE/Microservices
+          MetricName: TotalRequests
+          MetricValue: "1"
+          Unit: Count
+
+  Error5xxMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref GatewayLogGroup
+      FilterPattern: '[prefix, method, path, arrow, status = 5*, duration]'
+      MetricTransformations:
+        - MetricNamespace: TABLESERVE/Microservices
+          MetricName: 5xxErrors
+          MetricValue: "1"
+          Unit: Count
+
+  # =========================================================================
+  # 3. SNS TOPIC FOR CLOUDWATCH ALARMS
+  # =========================================================================
+  CloudWatchAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentName}-cloudwatch-alarms"
+      DisplayName: TABLESERVE CloudWatch Critical Alarms
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+
+  # =========================================================================
+  # 4. CLOUDWATCH METRIC ALARMS
+  # =========================================================================
+  HighCPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${EnvironmentName}-EC2-HighCPU-Utilization"
+      AlarmDescription: "Triggers when EC2 host CPU utilization exceeds 80% for 5 minutes"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref CloudWatchAlarmTopic
+      TreatMissingData: notBreaching
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${EnvironmentName}-Microservices-HighLatency"
+      AlarmDescription: "Triggers when average microservice response latency exceeds 1000ms"
+      Namespace: TABLESERVE/Microservices
+      MetricName: ResponseTime
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CloudWatchAlarmTopic
+      TreatMissingData: notBreaching
+
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${EnvironmentName}-Microservices-High5xxErrors"
+      AlarmDescription: "Triggers when 5xx server error count exceeds 5 in a 5-minute window"
+      Namespace: TABLESERVE/Microservices
+      MetricName: 5xxErrors
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref CloudWatchAlarmTopic
+      TreatMissingData: notBreaching
+
+  # =========================================================================
+  # 5. CLOUDWATCH DASHBOARD
+  # =========================================================================
+  OperationalDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: TABLESERVE-Operations-Dashboard
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 2,
+              "properties": {
+                "markdown": "# ⚡ TABLESERVE Enterprise CloudWatch Operational Dashboard\nReal-time monitoring across **API Gateway**, **Restaurant Catalog**, **Reservations & Payments**, **Ordering**, **Search**, and **Amazon Lex Chatbot** microservices."
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 2,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "TABLESERVE/Microservices", "RequestCount", "ServiceName", "API-Gateway", { "label": "API Gateway Requests", "stat": "Sum" } ],
+                  [ "...", "Restaurant-Service", { "label": "Restaurant Service", "stat": "Sum" } ],
+                  [ "...", "Reservation-Service", { "label": "Reservation Service", "stat": "Sum" } ],
+                  [ "...", "Ordering-Service", { "label": "Ordering Service", "stat": "Sum" } ],
+                  [ "...", "Search-Service", { "label": "Search Service", "stat": "Sum" } ],
+                  [ "...", "Chatbot-Service", { "label": "Lex Chatbot Service", "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": true,
+                "region": "${AWS::Region}",
+                "title": "API Request Traffic by Microservice",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 2,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "TABLESERVE/Microservices", "ResponseTime", "ServiceName", "API-Gateway", { "label": "Gateway Latency (ms)", "color": "#ff7f0e" } ],
+                  [ "...", "Restaurant-Service", { "label": "Restaurant Latency (ms)", "color": "#2ca02c" } ],
+                  [ "...", "Reservation-Service", { "label": "Reservation Latency (ms)", "color": "#d62728" } ],
+                  [ "...", "Ordering-Service", { "label": "Ordering Latency (ms)", "color": "#9467bd" } ]
+                ],
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "title": "End-to-End Latency by Service (ms)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "label": "Milliseconds",
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 8,
+              "width": 8,
+              "height": 5,
+              "properties": {
+                "metrics": [
+                  [ "TABLESERVE/Microservices", "ReservationsCreated", { "label": "Table Reservations Locked", "color": "#1f77b4" } ],
+                  [ ".", "OrdersPlaced", { "label": "Kitchen Orders Placed", "color": "#2ca02c" } ]
+                ],
+                "view": "singleValue",
+                "region": "${AWS::Region}",
+                "title": "Business Throughput (Reservations & Orders)",
+                "period": 3600
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 8,
+              "width": 8,
+              "height": 5,
+              "properties": {
+                "metrics": [
+                  [ "TABLESERVE/Microservices", "ChatbotInteractions", { "label": "Conversational Bot Turns", "color": "#9467bd" } ],
+                  [ ".", "VoiceAudioInputs", { "label": "Voice / Mic Speech Turns", "color": "#8c564b" } ]
+                ],
+                "view": "singleValue",
+                "region": "${AWS::Region}",
+                "title": "AI Concierge & Voice Engagement",
+                "period": 3600
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 8,
+              "width": 8,
+              "height": 5,
+              "properties": {
+                "metrics": [
+                  [ "TABLESERVE/Microservices", "HTTP_200_OK", { "label": "200 Success", "color": "#2ca02c" } ],
+                  [ ".", "HTTP_4xx_ClientError", { "label": "4xx Client Errors", "color": "#ffbb78" } ],
+                  [ ".", "HTTP_5xx_ServerError", { "label": "5xx Server Errors", "color": "#d62728" } ]
+                ],
+                "view": "pie",
+                "region": "${AWS::Region}",
+                "title": "HTTP Response Status Code Distribution",
+                "period": 3600
+              }
+            },
+            {
+              "type": "alarm",
+              "x": 0,
+              "y": 13,
+              "width": 24,
+              "height": 3,
+              "properties": {
+                "title": "CloudWatch Active Alarms Status",
+                "alarms": [
+                  !Sub "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-EC2-HighCPU-Utilization",
+                  !Sub "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-Microservices-HighLatency",
+                  !Sub "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-Microservices-High5xxErrors"
+                ]
+              }
+            }
+          ]
+        }
+
+Outputs:
+  DashboardURL:
+    Description: Direct URL to the Amazon CloudWatch Dashboard in AWS Management Console
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=TABLESERVE-Operations-Dashboard"
+
+  AlarmTopicArn:
+    Description: SNS Topic ARN for CloudWatch Alarms
+    Value: !Ref CloudWatchAlarmTopic

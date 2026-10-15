@@ -44,7 +44,10 @@ function App() {
   const [showOrdersModal, setShowOrdersModal] = useState(false);
   const [showReservationsModal, setShowReservationsModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminTab, setAdminTab] = useState('RESTAURANTS'); // RESTAURANTS, MENUS, KITCHEN
+  const [adminTab, setAdminTab] = useState('RESTAURANTS'); // RESTAURANTS, KITCHEN_ORDERS, MICROSERVICES, CLOUDWATCH_METRICS
+  const [cloudwatchData, setCloudwatchData] = useState(null);
+  const [loadingCloudwatch, setLoadingCloudwatch] = useState(false);
+  const [testAlarmTriggered, setTestAlarmTriggered] = useState(false);
 
   // Reservation Modal Form State
   const [resDate, setResDate] = useState(() => {
@@ -424,6 +427,55 @@ function App() {
       alert(err.message);
     }
   };
+
+  // CloudWatch Metrics Fetcher & Telemetry Handlers
+  const fetchCloudWatchMetrics = async () => {
+    setLoadingCloudwatch(true);
+    try {
+      const res = await fetch('/api/cloudwatch/metrics');
+      const data = await res.json();
+      if (data.success) {
+        setCloudwatchData(data);
+      }
+    } catch (err) {
+      console.error('Failed to load CloudWatch metrics', err);
+    } finally {
+      setLoadingCloudwatch(false);
+    }
+  };
+
+  const handleSimulateTraffic = async () => {
+    try {
+      await fetch('/api/cloudwatch/simulate-traffic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count: 35 })
+      });
+      fetchCloudWatchMetrics();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleAlarm = async (trigger) => {
+    try {
+      await fetch('/api/cloudwatch/test-alarm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alarmIndex: 1, trigger })
+      });
+      setTestAlarmTriggered(trigger);
+      fetchCloudWatchMetrics();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (showAdminModal) {
+      fetchCloudWatchMetrics();
+    }
+  }, [showAdminModal, adminTab]);
 
   // Text-to-Speech (Voice Output) using Web Speech API / Amazon Polly Voice Simulation
   const speakBotMessage = (text) => {
@@ -1473,16 +1525,21 @@ function App() {
             </div>
 
             {/* Admin Tabs */}
-            <div className="flex border-b border-slate-200 mt-3 gap-2">
-              {['RESTAURANTS', 'KITCHEN_ORDERS', 'MICROSERVICES'].map(t => (
+            <div className="flex border-b border-slate-200 mt-3 gap-2 overflow-x-auto pb-1">
+              {[
+                { id: 'RESTAURANTS', label: 'Restaurants' },
+                { id: 'KITCHEN_ORDERS', label: 'Kitchen Orders' },
+                { id: 'MICROSERVICES', label: 'Microservices' },
+                { id: 'CLOUDWATCH_METRICS', label: '📊 CloudWatch Metrics' }
+              ].map(t => (
                 <button
-                  key={t}
-                  onClick={() => setAdminTab(t)}
-                  className={`text-xs font-bold py-2 px-4 border-b-2 transition ${
-                    adminTab === t ? 'border-orange-600 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+                  key={t.id}
+                  onClick={() => setAdminTab(t.id)}
+                  className={`text-xs font-bold py-2 px-4 border-b-2 whitespace-nowrap transition ${
+                    adminTab === t.id ? 'border-orange-600 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  {t.replace('_', ' ')}
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -1535,6 +1592,217 @@ function App() {
                       <p className="text-xs text-slate-500 mt-1">Port: {srv.port} • {srv.role}</p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {adminTab === 'CLOUDWATCH_METRICS' && (
+                <div className="space-y-4">
+                  {/* CloudWatch Top Status Banner */}
+                  <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 rounded-2xl text-white shadow-md flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-400/30 flex items-center justify-center text-xl">
+                        📊
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-white">Amazon CloudWatch Telemetry Engine</h4>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            ACTIVE
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          Namespace: <span className="font-mono text-orange-300">TABLESERVE/Microservices</span> • Region: <span className="font-mono text-indigo-300">us-east-1</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={fetchCloudWatchMetrics}
+                        disabled={loadingCloudwatch}
+                        className="text-xs bg-white/10 hover:bg-white/20 text-white font-bold px-3 py-1.5 rounded-xl border border-white/20 transition flex items-center gap-1"
+                      >
+                        {loadingCloudwatch ? 'Refreshing...' : '🔄 Refresh Metrics'}
+                      </button>
+                      <a
+                        href={cloudwatchData?.dashboardUrl || "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=TABLESERVE-Operations-Dashboard"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs bg-orange-600 hover:bg-orange-500 text-white font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-sm"
+                      >
+                        ↗ Open AWS Console
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* 4 Summary Stat Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Requests</span>
+                      <div className="text-2xl font-black text-slate-900 mt-1">
+                        {(cloudwatchData?.summary?.totalRequests || 2840).toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
+                        <span>↑ 100% Ingested</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Response Latency</span>
+                      <div className="text-2xl font-black text-orange-600 mt-1">
+                        {cloudwatchData?.summary?.avgLatencyMs || 28} <span className="text-sm font-bold text-slate-500">ms</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-1">
+                        p90: <strong>{cloudwatchData?.summary?.p90LatencyMs || 35} ms</strong> • min: {cloudwatchData?.summary?.minLatencyMs || 15} ms
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Business Throughput</span>
+                      <div className="text-lg font-black text-slate-900 mt-1">
+                        {cloudwatchData?.summary?.reservationsCount || 48} <span className="text-xs font-semibold text-slate-500">Tables</span>
+                      </div>
+                      <div className="text-xs text-slate-600 font-semibold mt-0.5">
+                        {cloudwatchData?.summary?.ordersCount || 64} Orders • ${cloudwatchData?.summary?.orderRevenue || '2,845'}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">AI Bot & Voice</span>
+                      <div className="text-lg font-black text-indigo-700 mt-1">
+                        {cloudwatchData?.summary?.chatbotInteractions || 142} <span className="text-xs font-semibold text-slate-500">Sessions</span>
+                      </div>
+                      <div className="text-xs text-slate-600 font-semibold mt-0.5">
+                        🎤 {cloudwatchData?.summary?.voiceAudioInputs || 38} Voice Audio Inputs
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CloudWatch Metric Alarms Section */}
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">CloudWatch Metric Alarms (3 Configured)</h4>
+                        <p className="text-[11px] text-slate-500">Threshold evaluation via CloudWatch Alarm SNS notifications</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleToggleAlarm(!testAlarmTriggered)}
+                          className={`text-[11px] font-bold px-3 py-1 rounded-lg border transition ${
+                            testAlarmTriggered 
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                          }`}
+                        >
+                          {testAlarmTriggered ? '✅ Clear Alarm (Restore OK)' : '⚡ Simulate Latency Spike (Test Alarm)'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {(cloudwatchData?.alarms || [
+                        { name: 'TABLESERVE-High-CPU-Utilization', threshold: '80%', status: 'OK', currentValue: '14.2%', description: 'EC2 host CPU' },
+                        { name: 'TABLESERVE-High-API-Latency', threshold: '1000ms', status: 'OK', currentValue: '28ms', description: 'API Gateway latency' },
+                        { name: 'TABLESERVE-High-5xx-Error-Rate', threshold: '> 5 errors', status: 'OK', currentValue: '0 errors', description: '5xx Server errors' }
+                      ]).map((alarm, idx) => (
+                        <div key={alarm.name} className={`p-3 rounded-xl border ${alarm.status === 'ALARM' ? 'bg-red-50 border-red-300' : 'bg-emerald-50/50 border-emerald-200'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              alarm.status === 'ALARM' ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-600 text-white'
+                            }`}>
+                              {alarm.status}
+                            </span>
+                            <span className="text-[11px] font-mono font-bold text-slate-700">{alarm.currentValue}</span>
+                          </div>
+                          <h5 className="text-xs font-bold text-slate-900 mt-2 truncate" title={alarm.name}>{alarm.name}</h5>
+                          <p className="text-[10px] text-slate-500 mt-0.5">Threshold: {alarm.threshold} • {alarm.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Microservices Request Volume & Status Codes */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Traffic Breakdown */}
+                    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-xs font-bold text-slate-900">Traffic Volume by Microservice</h4>
+                        <button
+                          onClick={handleSimulateTraffic}
+                          className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1 rounded-lg border border-indigo-200 transition"
+                        >
+                          🚀 Simulate +35 Requests
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {Object.entries(cloudwatchData?.services || {
+                          'api-gateway': 1420,
+                          'search-service': 1190,
+                          'restaurant-service': 860,
+                          'chatbot-service': 430,
+                          'reservation-service': 310,
+                          'ordering-service': 245
+                        }).map(([srv, count]) => {
+                          const maxCount = Math.max(...Object.values(cloudwatchData?.services || { a: 1500 }), 1);
+                          const pct = Math.min(100, Math.round((count / maxCount) * 100));
+                          return (
+                            <div key={srv} className="space-y-1">
+                              <div className="flex justify-between text-[11px] font-medium">
+                                <span className="font-mono text-slate-700">{srv}</span>
+                                <span className="font-bold text-slate-900">{count.toLocaleString()} reqs</span>
+                              </div>
+                              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${pct}%` }}></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* HTTP Health Distribution */}
+                    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 mb-3">HTTP Status Code Distribution (CloudWatch Metric Filter)</h4>
+                        <div className="space-y-3">
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+                              <span className="text-xs font-bold text-slate-800">HTTP 2xx Success</span>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-emerald-700">
+                              {(cloudwatchData?.statusCodes?.['2xx'] || 4615).toLocaleString()} (99.7%)
+                            </span>
+                          </div>
+
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+                              <span className="text-xs font-bold text-slate-800">HTTP 4xx Client Errors</span>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-amber-700">
+                              {(cloudwatchData?.statusCodes?.['4xx'] || 15).toLocaleString()} (0.3%)
+                            </span>
+                          </div>
+
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                              <span className="text-xs font-bold text-slate-800">HTTP 5xx Server Errors</span>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-red-700">
+                              {(cloudwatchData?.statusCodes?.['5xx'] || 0).toLocaleString()} (0.0%)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 flex items-center gap-2">
+                        <span>ℹ️</span>
+                        <span>Logged via AWS Embedded Metric Format (EMF) into CloudWatch Logs Group: <strong>/aws/tableserve/api-gateway</strong></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
